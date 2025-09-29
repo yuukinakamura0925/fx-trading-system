@@ -21,6 +21,8 @@ services:
       - "8000:8000"
     depends_on:
       - db
+    env_file:
+      - .env  # .envファイルから環境変数を読み込み
     environment:
       - DATABASE_URL=postgresql://fx_user:fx_password123@db:5432/fx_trading
     volumes:
