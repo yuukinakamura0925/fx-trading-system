@@ -1,0 +1,612 @@
+openapi: 3.0.3
+info:
+  title: FX Trading System API
+  description: |
+    GMOコインFX自動売買システムのREST API仕様書
+
+    ## 概要
+    - Django REST Framework で構築
+    - PostgreSQL データベース
+    - リアルタイム価格データとポジション管理
+
+    ## 認証
+    現在は開発用で認証なし（AllowAny）
+
+  version: 1.0.0
+  contact:
+    name: FX Trading System
+    email: developer@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000/api
+    description: 開発環境
+  - url: http://localhost:8000/api
+    description: Docker環境
+
+paths:
+  # ===== 通貨ペア管理 =====
+  /currencies/:
+    get:
+      tags:
+        - 通貨ペア管理
+      summary: 全通貨ペア取得
+      description: システムに登録されている全ての通貨ペアを取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Currency'
+    post:
+      tags:
+        - 通貨ペア管理
+      summary: 通貨ペア作成
+      description: 新しい通貨ペアを登録
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyInput'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+
+  /currencies/active/:
+    get:
+      tags:
+        - 通貨ペア管理
+      summary: アクティブ通貨ペア取得
+      description: is_active=True の通貨ペアのみ取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Currency'
+
+  # ===== 市場データ =====
+  /market-data/:
+    get:
+      tags:
+        - 市場データ
+      summary: 市場価格データ取得
+      description: |
+        市場価格データを取得（フィルタリング対応）
+        
+        ## クエリパラメータ
+        - currency: 通貨ペア指定（例: USD_JPY）
+        - hours: 過去N時間分のデータ（例: 24）
+      parameters:
+        - name: currency
+          in: query
+          description: 通貨ペア指定
+          schema:
+            type: string
+            example: USD_JPY
+        - name: hours
+          in: query
+          description: 過去N時間分のデータ
+          schema:
+            type: integer
+            example: 24
+        - name: limit
+          in: query
+          description: 取得件数制限
+          schema:
+            type: integer
+            example: 100
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketData'
+
+  /market-data/latest/:
+    get:
+      tags:
+        - 市場データ
+      summary: 最新価格取得
+      description: 各通貨ペアの最新価格データを取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MarketData'
+
+  # ===== ポジション管理 =====
+  /positions/:
+    get:
+      tags:
+        - ポジション管理
+      summary: 全ポジション取得
+      description: システムの全ポジションを取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Position'
+
+  /positions/open/:
+    get:
+      tags:
+        - ポジション管理
+      summary: オープンポジション取得
+      description: status='OPEN' のポジションのみ取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Position'
+
+  /positions/summary/:
+    get:
+      tags:
+        - ポジション管理
+      summary: ポジションサマリー取得
+      description: ポジションの統計情報を取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PositionSummary'
+
+  # ===== 取引履歴 =====
+  /trades/:
+    get:
+      tags:
+        - 取引履歴
+      summary: 取引履歴取得
+      description: |
+        取引履歴を取得（フィルタリング対応）
+        
+        ## クエリパラメータ
+        - strategy: 戦略名でフィルタ
+        - status: ステータスでフィルタ（EXECUTED、PENDING等）
+      parameters:
+        - name: strategy
+          in: query
+          description: 戦略名でフィルタ
+          schema:
+            type: string
+            example: "21時戦略"
+        - name: status
+          in: query
+          description: ステータスでフィルタ
+          schema:
+            type: string
+            enum: [PENDING, EXECUTED, CANCELLED, REJECTED]
+            example: EXECUTED
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Trade'
+
+  /trades/recent/:
+    get:
+      tags:
+        - 取引履歴
+      summary: 直近取引履歴取得
+      description: 直近N日間の取引履歴を取得
+      parameters:
+        - name: days
+          in: query
+          description: 過去N日間のデータ
+          schema:
+            type: integer
+            default: 7
+            example: 7
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Trade'
+
+  # ===== 戦略パフォーマンス =====
+  /performance/dashboard/:
+    get:
+      tags:
+        - 戦略パフォーマンス
+      summary: ダッシュボード用データ取得
+      description: 戦略別のパフォーマンスサマリーを取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  $ref: '#/components/schemas/StrategyDashboard'
+
+components:
+  schemas:
+    # ===== 通貨ペア =====
+    Currency:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        symbol:
+          type: string
+          description: 通貨ペア名
+          example: "USD_JPY"
+        base_currency:
+          type: string
+          description: 基軸通貨
+          example: "USD"
+        quote_currency:
+          type: string
+          description: 決済通貨
+          example: "JPY"
+        pip_size:
+          type: string
+          format: decimal
+          description: 1pipのサイズ
+          example: "0.01000"
+        min_trade_size:
+          type: integer
+          description: 最小取引単位
+          example: 1000
+        is_active:
+          type: boolean
+          description: アクティブ状態
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    CurrencyInput:
+      type: object
+      required:
+        - symbol
+        - base_currency
+        - quote_currency
+      properties:
+        symbol:
+          type: string
+          example: "EUR_USD"
+        base_currency:
+          type: string
+          example: "EUR"
+        quote_currency:
+          type: string
+          example: "USD"
+        pip_size:
+          type: string
+          format: decimal
+          example: "0.00010"
+        min_trade_size:
+          type: integer
+          example: 1000
+
+    # ===== 市場データ =====
+    MarketData:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        currency:
+          type: integer
+          description: 通貨ペアID
+          example: 1
+        currency_symbol:
+          type: string
+          description: 通貨ペア名
+          example: "USD_JPY"
+        timestamp:
+          type: string
+          format: date-time
+          description: データ取得時刻
+          example: "2024-01-01T12:00:00Z"
+        bid:
+          type: string
+          format: decimal
+          description: 売値
+          example: "150.12345"
+        ask:
+          type: string
+          format: decimal
+          description: 買値
+          example: "150.12355"
+        spread:
+          type: string
+          format: decimal
+          description: スプレッド
+          example: "0.00010"
+        mid_price:
+          type: string
+          format: decimal
+          description: 中値
+          example: "150.12350"
+        volume:
+          type: integer
+          description: 出来高
+          example: 1000000
+
+    # ===== ポジション =====
+    Position:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        strategy:
+          type: integer
+          description: 戦略ID
+          example: 1
+        strategy_name:
+          type: string
+          description: 戦略名
+          example: "21時戦略"
+        currency:
+          type: integer
+          description: 通貨ペアID
+          example: 1
+        currency_symbol:
+          type: string
+          description: 通貨ペア名
+          example: "USD_JPY"
+        side:
+          type: string
+          enum: [BUY, SELL]
+          description: 売買方向
+          example: "BUY"
+        size:
+          type: integer
+          description: 取引数量
+          example: 10000
+        entry_price:
+          type: string
+          format: decimal
+          description: エントリー価格
+          example: "150.12345"
+        current_price:
+          type: string
+          format: decimal
+          description: 現在価格
+          example: "150.15000"
+        stop_loss:
+          type: string
+          format: decimal
+          description: 損切り価格
+          nullable: true
+          example: "149.50000"
+        take_profit:
+          type: string
+          format: decimal
+          description: 利確価格
+          nullable: true
+          example: "151.00000"
+        unrealized_pnl:
+          type: string
+          format: decimal
+          description: 含み損益
+          example: "265.50"
+        current_pnl:
+          type: number
+          format: float
+          description: 現在損益（動的計算）
+          example: 265.5
+        status:
+          type: string
+          enum: [OPEN, CLOSED, PARTIAL]
+          description: ポジション状態
+          example: "OPEN"
+        opened_at:
+          type: string
+          format: date-time
+          description: 建玉時刻
+          example: "2024-01-01T09:00:00Z"
+        closed_at:
+          type: string
+          format: date-time
+          description: 決済時刻
+          nullable: true
+          example: null
+
+    PositionSummary:
+      type: object
+      properties:
+        total_positions:
+          type: integer
+          description: 総ポジション数
+          example: 5
+        total_unrealized_pnl:
+          type: number
+          format: float
+          description: 総含み損益
+          example: 1250.75
+        long_positions:
+          type: integer
+          description: 買いポジション数
+          example: 3
+        short_positions:
+          type: integer
+          description: 売りポジション数
+          example: 2
+
+    # ===== 取引履歴 =====
+    Trade:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        position:
+          type: integer
+          description: 関連ポジションID
+          nullable: true
+          example: 1
+        strategy:
+          type: integer
+          description: 戦略ID
+          example: 1
+        strategy_name:
+          type: string
+          description: 戦略名
+          example: "21時戦略"
+        currency:
+          type: integer
+          description: 通貨ペアID
+          example: 1
+        currency_symbol:
+          type: string
+          description: 通貨ペア名
+          example: "USD_JPY"
+        side:
+          type: string
+          enum: [BUY, SELL]
+          description: 売買方向
+          example: "BUY"
+        size:
+          type: integer
+          description: 取引数量
+          example: 10000
+        price:
+          type: string
+          format: decimal
+          description: 約定価格
+          example: "150.12345"
+        order_type:
+          type: string
+          enum: [MARKET, LIMIT, STOP]
+          description: 注文種別
+          example: "MARKET"
+        status:
+          type: string
+          enum: [PENDING, EXECUTED, CANCELLED, REJECTED]
+          description: 注文状態
+          example: "EXECUTED"
+        profit_loss:
+          type: string
+          format: decimal
+          description: 損益
+          example: "500.00"
+        commission:
+          type: string
+          format: decimal
+          description: 手数料
+          example: "20.00"
+        execution_time:
+          type: string
+          format: date-time
+          description: 約定時刻
+          nullable: true
+          example: "2024-01-01T09:00:30Z"
+        created_at:
+          type: string
+          format: date-time
+          description: 注文作成時刻
+          example: "2024-01-01T09:00:00Z"
+
+    # ===== 戦略パフォーマンス =====
+    StrategyDashboard:
+      type: object
+      properties:
+        total_trades:
+          type: integer
+          description: 総取引回数
+          example: 150
+        total_pnl:
+          type: number
+          format: float
+          description: 総損益
+          example: 12500.75
+        win_rate:
+          type: number
+          format: float
+          description: 勝率
+          example: 0
+        best_day:
+          type: number
+          format: float
+          description: 最良日の損益
+          example: 2500.0
+        worst_day:
+          type: number
+          format: float
+          description: 最悪日の損益
+          example: -800.0
+
+  # ===== エラーレスポンス =====
+  responses:
+    BadRequest:
+      description: リクエスト形式エラー
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Invalid request format"
+              details:
+                type: object
+
+    NotFound:
+      description: リソースが見つからない
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Resource not found"
+
+    InternalServerError:
+      description: サーバー内部エラー
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "Internal server error"
+              message:
+                type: string

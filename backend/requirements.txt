@@ -1,0 +1,30 @@
+# Django Web Framework
+Django==4.2.7
+djangorestframework==3.14.0
+
+# CORS設定（Next.jsからのアクセス許可）
+django-cors-headers==4.3.1
+
+# WebSocket通信（リアルタイム価格データ）
+channels==4.0.0
+channels-redis==4.1.0
+
+# バックグラウンドタスク（自動取引実行）
+celery==5.3.4
+redis==5.0.1
+
+# HTTP通信（GMO API用）
+requests==2.31.0
+
+# データ処理
+pandas==2.1.0
+numpy==1.24.3
+
+# 環境変数管理
+python-dotenv==1.0.0
+
+# 本番サーバー
+gunicorn==21.2.0
+
+# データベース（PostgreSQL用）
+psycopg2-binary==2.9.9

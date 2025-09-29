@@ -1,0 +1,293 @@
+{
+  "info": {
+    "name": "FX Trading System API",
+    "description": "GMOコインFX自動売買システムのAPI集\n\n## 使用方法\n1. 環境変数 {{base_url}} を http://localhost:8000/api に設定\n2. 各エンドポイントをテスト\n\n## 主要機能\n- 通貨ペア管理\n- リアルタイム価格データ\n- ポジション管理\n- 取引履歴\n- 戦略パフォーマンス",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "通貨ペア管理",
+      "item": [
+        {
+          "name": "全通貨ペア取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/currencies/",
+              "host": ["{{base_url}}"],
+              "path": ["currencies", ""]
+            },
+            "description": "システムに登録されている全ての通貨ペアを取得"
+          }
+        },
+        {
+          "name": "アクティブ通貨ペア取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/currencies/active/",
+              "host": ["{{base_url}}"],
+              "path": ["currencies", "active", ""]
+            },
+            "description": "is_active=True の通貨ペアのみ取得"
+          }
+        },
+        {
+          "name": "通貨ペア作成",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"symbol\": \"EUR_USD\",\n  \"base_currency\": \"EUR\",\n  \"quote_currency\": \"USD\",\n  \"pip_size\": \"0.00010\",\n  \"min_trade_size\": 1000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/currencies/",
+              "host": ["{{base_url}}"],
+              "path": ["currencies", ""]
+            },
+            "description": "新しい通貨ペアを作成"
+          }
+        }
+      ]
+    },
+    {
+      "name": "市場データ",
+      "item": [
+        {
+          "name": "市場データ取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/market-data/",
+              "host": ["{{base_url}}"],
+              "path": ["market-data", ""]
+            },
+            "description": "市場価格データを取得"
+          }
+        },
+        {
+          "name": "市場データ(通貨ペア指定)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/market-data/?currency=USD_JPY",
+              "host": ["{{base_url}}"],
+              "path": ["market-data", ""],
+              "query": [
+                {
+                  "key": "currency",
+                  "value": "USD_JPY"
+                }
+              ]
+            },
+            "description": "特定の通貨ペアの市場データを取得"
+          }
+        },
+        {
+          "name": "市場データ(時間指定)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/market-data/?hours=24",
+              "host": ["{{base_url}}"],
+              "path": ["market-data", ""],
+              "query": [
+                {
+                  "key": "hours",
+                  "value": "24"
+                }
+              ]
+            },
+            "description": "過去24時間の市場データを取得"
+          }
+        },
+        {
+          "name": "最新価格取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/market-data/latest/",
+              "host": ["{{base_url}}"],
+              "path": ["market-data", "latest", ""]
+            },
+            "description": "各通貨ペアの最新価格を取得"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ポジション管理",
+      "item": [
+        {
+          "name": "全ポジション取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/positions/",
+              "host": ["{{base_url}}"],
+              "path": ["positions", ""]
+            },
+            "description": "全てのポジションを取得"
+          }
+        },
+        {
+          "name": "オープンポジション取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/positions/open/",
+              "host": ["{{base_url}}"],
+              "path": ["positions", "open", ""]
+            },
+            "description": "オープン中のポジションのみ取得"
+          }
+        },
+        {
+          "name": "ポジションサマリー取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/positions/summary/",
+              "host": ["{{base_url}}"],
+              "path": ["positions", "summary", ""]
+            },
+            "description": "ポジションの統計情報を取得"
+          }
+        }
+      ]
+    },
+    {
+      "name": "取引履歴",
+      "item": [
+        {
+          "name": "取引履歴取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/trades/",
+              "host": ["{{base_url}}"],
+              "path": ["trades", ""]
+            },
+            "description": "全ての取引履歴を取得"
+          }
+        },
+        {
+          "name": "取引履歴(戦略指定)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/trades/?strategy=21時戦略",
+              "host": ["{{base_url}}"],
+              "path": ["trades", ""],
+              "query": [
+                {
+                  "key": "strategy",
+                  "value": "21時戦略"
+                }
+              ]
+            },
+            "description": "特定戦略の取引履歴を取得"
+          }
+        },
+        {
+          "name": "取引履歴(ステータス指定)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/trades/?status=EXECUTED",
+              "host": ["{{base_url}}"],
+              "path": ["trades", ""],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "EXECUTED"
+                }
+              ]
+            },
+            "description": "約定済みの取引履歴を取得"
+          }
+        },
+        {
+          "name": "直近取引履歴取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/trades/recent/?days=7",
+              "host": ["{{base_url}}"],
+              "path": ["trades", "recent", ""],
+              "query": [
+                {
+                  "key": "days",
+                  "value": "7"
+                }
+              ]
+            },
+            "description": "過去7日間の取引履歴を取得"
+          }
+        }
+      ]
+    },
+    {
+      "name": "戦略パフォーマンス",
+      "item": [
+        {
+          "name": "ダッシュボードデータ取得",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/performance/dashboard/",
+              "host": ["{{base_url}}"],
+              "path": ["performance", "dashboard", ""]
+            },
+            "description": "戦略別のパフォーマンスサマリーを取得"
+          }
+        }
+      ]
+    },
+    {
+      "name": "システム情報",
+      "item": [
+        {
+          "name": "API Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            },
+            "description": "利用可能なAPIエンドポイント一覧を取得"
+          }
+        }
+      ]
+    }
+  ]
+}
