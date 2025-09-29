@@ -1,0 +1,245 @@
+{
+  "timestamp": "2025-09-29T17:14:02.293298",
+  "symbol": "USDJPY=X",
+  "timeframe_analyses": {
+    "5m": {
+      "timeframe": "5m",
+      "trading_style": "スキャルピング",
+      "description": "5分足スキャルピング",
+      "analysis": {
+        "current_price": 148.49200439453125,
+        "trend": "強い下降",
+        "signal": "BUY",
+        "confidence": 54.0,
+        "strength": "中程度",
+        "sma_short": 148.53760375976563,
+        "sma_long": 148.67825164794922,
+        "rsi": 12.609782678376817,
+        "momentum": "中立",
+        "volatility": 0.023911898693252574,
+        "key_levels": {
+          "resistance": 148.85299682617188,
+          "support": 148.47900390625,
+          "pivot": 148.60800170898438
+        }
+      },
+      "entry_points": [
+        {
+          "type": "押し目買い",
+          "price": 148.41775839233398,
+          "stop_loss": 148.3435123901367,
+          "take_profit": 148.71474240112306,
+          "timeframe": "1-5分",
+          "reason": "短期上昇トレンドの押し目"
+        }
+      ],
+      "strategy": {
+        "style": "スキャルピング",
+        "holding_period": "1-30分",
+        "profit_target": "5-15pips",
+        "stop_loss": "3-8pips",
+        "frequency": "1日10-50回",
+        "best_sessions": [
+          "東京仲値",
+          "ロンドン序盤",
+          "NY序盤"
+        ],
+        "avoid_times": [
+          "東京昼休み",
+          "欧州昼食",
+          "重要指標前後"
+        ]
+      },
+      "data_points": 111
+    },
+    "1h": {
+      "timeframe": "1h",
+      "trading_style": "デイトレード",
+      "description": "1時間足デイトレード",
+      "analysis": {
+        "current_price": 148.49200439453125,
+        "trend": "強い下降",
+        "signal": "BUY",
+        "confidence": 60.0,
+        "strength": "中程度",
+        "sma_short": 148.91340026855468,
+        "sma_long": 149.3488800048828,
+        "rsi": 9.355472863862957,
+        "momentum": "やや弱い",
+        "volatility": 0.07400991617262512,
+        "key_levels": {
+          "resistance": 149.8979949951172,
+          "support": 148.47900390625,
+          "pivot": 148.95633443196616
+        }
+      },
+      "entry_points": [],
+      "strategy": {
+        "style": "デイトレード",
+        "holding_period": "1-12時間",
+        "profit_target": "20-50pips",
+        "stop_loss": "15-30pips",
+        "frequency": "1日1-5回",
+        "best_sessions": [
+          "東京時間",
+          "ロンドン時間",
+          "NY時間"
+        ],
+        "avoid_times": [
+          "週末クローズ前",
+          "重要指標直前"
+        ]
+      },
+      "data_points": 104
+    },
+    "4h": {
+      "timeframe": "4h",
+      "trading_style": "ポジショントレード",
+      "description": "4時間足ポジショントレード",
+      "analysis": {
+        "current_price": 148.49200439453125,
+        "trend": "上昇",
+        "signal": "BUY",
+        "confidence": 70.0,
+        "strength": "中程度",
+        "sma_short": 149.43475087483725,
+        "sma_long": 148.78657707801233,
+        "rsi": 45.667105684316574,
+        "momentum": "やや弱い",
+        "volatility": 0.19149758297343852,
+        "key_levels": {
+          "resistance": 149.95599365234375,
+          "support": 147.75399780273438,
+          "pivot": 148.73399861653647
+        }
+      },
+      "entry_points": [
+        {
+          "type": "中期トレンド買い",
+          "price": 147.7495443725586,
+          "stop_loss": 146.26462432861328,
+          "take_profit": 152.9467645263672,
+          "timeframe": "3-7日",
+          "reason": "4時間足中期上昇トレンド"
+        }
+      ],
+      "strategy": {
+        "style": "ポジショントレード",
+        "holding_period": "1-7日",
+        "profit_target": "50-150pips",
+        "stop_loss": "30-80pips",
+        "frequency": "週1-3回",
+        "best_sessions": [
+          "週初",
+          "重要指標後"
+        ],
+        "avoid_times": [
+          "週末",
+          "祝日前"
+        ]
+      },
+      "data_points": 127
+    },
+    "1d": {
+      "timeframe": "1d",
+      "trading_style": "スイングトレード",
+      "description": "日足スイングトレード",
+      "analysis": {
+        "current_price": 148.5070037841797,
+        "trend": "強い上昇",
+        "signal": "BUY",
+        "confidence": 88.0,
+        "strength": "強い",
+        "sma_short": 147.82585067749022,
+        "sma_long": 147.70396026611328,
+        "rsi": 57.4638108599305,
+        "momentum": "やや強い",
+        "volatility": 0.559156194197415,
+        "key_levels": {
+          "resistance": 149.93499755859375,
+          "support": 146.2169952392578,
+          "pivot": 148.21966552734375
+        }
+      },
+      "entry_points": [
+        {
+          "type": "長期トレンド買い",
+          "price": 147.02193374633788,
+          "stop_loss": 144.0517936706543,
+          "take_profit": 155.93235397338867,
+          "timeframe": "1-4週間",
+          "reason": "日足長期上昇トレンド"
+        }
+      ],
+      "strategy": {
+        "style": "スイングトレード",
+        "holding_period": "1週間-1ヶ月",
+        "profit_target": "100-500pips",
+        "stop_loss": "50-200pips",
+        "frequency": "月1-4回",
+        "best_sessions": [
+          "月初",
+          "四半期末"
+        ],
+        "avoid_times": [
+          "年末年始",
+          "夏季休暇"
+        ]
+      },
+      "data_points": 66
+    }
+  },
+  "integrated_strategy": {
+    "integrated_signal": "BUY",
+    "confidence": 73.6,
+    "signal_alignment": "強い買い合意",
+    "recommended_strategies": [
+      {
+        "timeframe": "1d",
+        "style": "スイングトレード",
+        "confidence": 88.0,
+        "entry_points": [
+          {
+            "type": "長期トレンド買い",
+            "price": 147.02193374633788,
+            "stop_loss": 144.0517936706543,
+            "take_profit": 155.93235397338867,
+            "timeframe": "1-4週間",
+            "reason": "日足長期上昇トレンド"
+          }
+        ],
+        "priority": "高"
+      },
+      {
+        "timeframe": "4h",
+        "style": "ポジショントレード",
+        "confidence": 70.0,
+        "entry_points": [
+          {
+            "type": "中期トレンド買い",
+            "price": 147.7495443725586,
+            "stop_loss": 146.26462432861328,
+            "take_profit": 152.9467645263672,
+            "timeframe": "3-7日",
+            "reason": "4時間足中期上昇トレンド"
+          }
+        ],
+        "priority": "中"
+      }
+    ],
+    "risk_level": "低",
+    "market_timing": {
+      "current_session": "ロンドン",
+      "activity_level": "高",
+      "week_timing": "週初（方向性不明）",
+      "recommendation": "様子見推奨"
+    }
+  },
+  "market_session": {
+    "active_sessions": [
+      "東京市場",
+      "ロンドン市場"
+    ],
+    "optimal_for": "デイトレード"
+  }
+}

@@ -72,6 +72,22 @@ const AdvancedRateDisplay = dynamic(
   }
 )
 
+// FX分析・戦略コンポーネントを動的インポート
+const FXAnalysisStrategy = dynamic(
+  () => import('../components/FXAnalysisStrategy'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+          <p className="text-gray-500">FX分析システムを読み込み中...</p>
+        </div>
+      </div>
+    )
+  }
+)
+
 
 // APIからの市場データ型定義
 interface MarketData {
@@ -386,11 +402,7 @@ export default function TradingDashboard() {
           )}
 
           {activeMenu === 'strategies' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <PieChart className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-800 mb-2">取引戦略</h3>
-              <p className="text-gray-500">戦略管理機能は開発中です</p>
-            </div>
+            <FXAnalysisStrategy />
           )}
 
           {activeMenu === 'reports' && (

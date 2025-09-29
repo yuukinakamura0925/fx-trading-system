@@ -11,6 +11,14 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+
+# .envファイルを読み込み
+load_dotenv()
+
+# OpenAI API設定
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +28,15 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-u!=upw$bp0jjr-l@$xzbnrk%&cnitvqe+5fa^r8#yv813r&n=5'
+# 環境変数から取得、なければデフォルト値を使用
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-u!=upw$bp0jjr-l@$xzbnrk%&cnitvqe+5fa^r8#yv813r&n=5')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# 環境変数から取得（文字列なのでbool変換）
+DEBUG = os.getenv('DJANGO_DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = []
+# 環境変数から許可ホストを取得
+ALLOWED_HOSTS = os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -89,14 +100,22 @@ import os
 # Docker環境では DB_HOST=db、ローカル開発では DB_HOST=localhost
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',  # PostgreSQL使用
-        'NAME': os.getenv('POSTGRES_DB', 'fx_trading'),  # データベース名
-        'USER': os.getenv('POSTGRES_USER', 'fx_user'),   # ユーザー名
-        'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'fx_password123'),  # パスワード
-        'HOST': os.getenv('DB_HOST', 'db'),         # Docker用：db、ローカル用：localhost
-        'PORT': os.getenv('DB_PORT', '5432'),       # PostgreSQLデフォルトポート
+        'ENGINE': 'django.db.backends.sqlite3',  # 開発用SQLite
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# PostgreSQL設定（Docker使用時）
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',  # PostgreSQL使用
+#         'NAME': os.getenv('POSTGRES_DB', 'fx_trading'),  # データベース名
+#         'USER': os.getenv('POSTGRES_USER', 'fx_user'),   # ユーザー名
+#         'PASSWORD': os.getenv('POSTGRES_PASSWORD', 'fx_password123'),  # パスワード
+#         'HOST': os.getenv('DB_HOST', 'db'),         # Docker用：db、ローカル用：localhost
+#         'PORT': os.getenv('DB_PORT', '5432'),       # PostgreSQLデフォルトポート
+#     }
+# }
 
 
 # Password validation
@@ -151,12 +170,46 @@ REST_FRAMEWORK = {
 }
 
 # CORS設定（Next.jsからのアクセス許可）
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Next.js開発サーバー
-    "http://127.0.0.1:3000",
-]
+# 環境変数から取得、なければデフォルト値
+CORS_ALLOWED_ORIGINS = os.getenv(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://localhost:8000'
+).split(',')
 
 CORS_ALLOW_ALL_ORIGINS = True  # 開発用（本番では上記リストを使用）
+
+# ========== カスタム設定（FXアプリ用） ==========
+
+# OpenAI API設定
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+
+# LLM設定
+LLM_CONFIG = {
+    'model': os.getenv('LLM_MODEL', 'gpt-3.5-turbo'),
+    'temperature': float(os.getenv('LLM_TEMPERATURE', '0.7')),
+    'max_tokens': int(os.getenv('LLM_MAX_TOKENS', '2000')),
+}
+
+# 分析設定
+ANALYSIS_CONFIG = {
+    'default_period': os.getenv('DEFAULT_ANALYSIS_PERIOD', '3mo'),
+    'default_interval': os.getenv('DEFAULT_ANALYSIS_INTERVAL', '1d'),
+}
+
+# ログ設定（開発環境用）
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': os.getenv('LOG_LEVEL', 'INFO'),
+    },
+}
 
 # タイムゾーン設定（日本時間）
 TIME_ZONE = 'Asia/Tokyo'

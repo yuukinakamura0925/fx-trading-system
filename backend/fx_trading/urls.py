@@ -24,7 +24,10 @@ urlpatterns = [
     
     # API エンドポイント - /api/ で始まるURLは全てAPIアプリが処理
     path('api/', include('api.urls')),
-    
+
+    # 分析APIエンドポイント
+    path('api/analysis/', include('analysis.urls')),
+
     # DRF のブラウザブルAPI（開発用）
     path('api-auth/', include('rest_framework.urls')),
 ]
@@ -36,3 +39,10 @@ urlpatterns = [
 # http://localhost:8000/api/positions/            # ポジションAPI
 # http://localhost:8000/api/trades/               # 取引履歴API
 # http://localhost:8000/api/performance/          # 戦略成績API
+#
+# == 新しい分析API ==
+# http://localhost:8000/api/analysis/analyze/         # ハイブリッド分析実行
+# http://localhost:8000/api/analysis/current-price/   # 現在価格取得
+# http://localhost:8000/api/analysis/historical/      # 過去データ取得
+# http://localhost:8000/api/analysis/supported-pairs/ # サポート通貨ペア一覧
+# http://localhost:8000/api/analysis/health/          # APIヘルスチェック
