@@ -1,5 +1,4 @@
 from rest_framework import serializers
-from .models import MarketData, GMOAPILog
 from core.models import Currency
 from trading.models import Strategy, Position, Trade, StrategyPerformance
 
@@ -8,15 +7,6 @@ class CurrencySerializer(serializers.ModelSerializer):
     class Meta:
         model = Currency
         fields = '__all__'  # 全フィールドを含める
-
-class MarketDataSerializer(serializers.ModelSerializer):
-    """市場価格データのJSON変換クラス"""
-    currency_symbol = serializers.CharField(source='currency.symbol', read_only=True)  # 通貨ペア名も含める
-    mid_price = serializers.DecimalField(max_digits=10, decimal_places=5, read_only=True)  # 中値計算結果
-    
-    class Meta:
-        model = MarketData
-        fields = ['id', 'currency', 'currency_symbol', 'timestamp', 'bid', 'ask', 'spread', 'mid_price', 'volume']
 
 class StrategySerializer(serializers.ModelSerializer):
     """取引戦略のJSON変換クラス"""

@@ -4,40 +4,73 @@ import { useState, useEffect, useRef } from 'react'
 
 interface TradingViewChartProps {
   symbol: string
-  marketData: any[]
 }
 
-export default function TradingViewChart({ symbol, marketData }: TradingViewChartProps) {
+// 時間足の選択肢
+const TIME_INTERVALS = [
+  { value: '1', label: '1分', description: '超短期' },
+  { value: '5', label: '5分', description: '短期' },
+  { value: '15', label: '15分', description: '中期' },
+  { value: '60', label: '1時間', description: '長期' },
+  { value: '240', label: '4時間', description: '超長期' },
+  { value: 'D', label: '日足', description: 'デイリー' },
+];
+
+export default function TradingViewChart({ symbol }: TradingViewChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [selectedInterval, setSelectedInterval] = useState('1') // デフォルト1分
+  const [isProChart, setIsProChart] = useState(false) // デフォルト軽量版
 
   useEffect(() => {
     if (!containerRef.current) return
 
-    // TradingViewウィジェットを埋め込み
-    const script = document.createElement('script')
-    script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'
-    script.type = 'text/javascript'
-    script.async = true
-    script.innerHTML = JSON.stringify({
-      "autosize": true,
-      "symbol": symbol.replace('_', ''),
-      "interval": "5",
-      "timezone": "Asia/Tokyo",
-      "theme": "light",
-      "style": "1",
-      "locale": "ja",
-      "toolbar_bg": "#f1f3f6",
-      "enable_publishing": false,
-      "allow_symbol_change": true,
-      "container_id": "tradingview_chart",
-      "hide_side_toolbar": false,
-      "studies": [
-        "Volume@tv-basicstudies"
-      ]
-    })
-
     // 既存のスクリプトをクリア
     containerRef.current.innerHTML = ''
+
+    const script = document.createElement('script')
+    script.type = 'text/javascript'
+    script.async = true
+
+    if (isProChart) {
+      // プロチャート（高機能版）
+      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'
+      script.innerHTML = JSON.stringify({
+        "autosize": true,
+        "symbol": `FX:${symbol.replace('_', '')}`,
+        "interval": selectedInterval,
+        "timezone": "Asia/Tokyo",
+        "theme": "light",
+        "style": "1",
+        "locale": "ja",
+        "toolbar_bg": "#f1f3f6",
+        "enable_publishing": false,
+        "allow_symbol_change": false,
+        "hide_side_toolbar": false,
+        "details": true,
+        "hotlist": true,
+        "calendar": true,
+        "studies": ["Volume@tv-basicstudies"],
+        "container_id": "tradingview_chart"
+      })
+    } else {
+      // 軽量チャート（シンプル版）
+      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js'
+      script.innerHTML = JSON.stringify({
+        "symbol": `FX:${symbol.replace('_', '')}`,
+        "width": "100%",
+        "height": "400",
+        "locale": "ja",
+        "dateRange": "12M",
+        "colorTheme": "light",
+        "trendLineColor": "rgba(41, 98, 255, 1)",
+        "underLineColor": "rgba(41, 98, 255, 0.3)",
+        "underLineBottomColor": "rgba(41, 98, 255, 0)",
+        "isTransparent": false,
+        "autosize": true,
+        "largeChartUrl": ""
+      })
+    }
+
     containerRef.current.appendChild(script)
 
     return () => {
@@ -45,7 +78,7 @@ export default function TradingViewChart({ symbol, marketData }: TradingViewChar
         containerRef.current.innerHTML = ''
       }
     }
-  }, [symbol])
+  }, [symbol, selectedInterval, isProChart])
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -57,17 +90,47 @@ export default function TradingViewChart({ symbol, marketData }: TradingViewChar
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
             <span className="text-sm text-gray-500">TradingView</span>
           </div>
-          <div className="text-sm">
-            <span className="text-gray-500">現在価格: </span>
-            <span className="font-bold text-blue-600 font-mono">
-              {marketData.find(m => m.currency_symbol === symbol)?.mid_price || '---'}
-            </span>
-          </div>
+          {isProChart && (
+            <div className="text-sm text-gray-600">
+              {TIME_INTERVALS.find(t => t.value === selectedInterval)?.label}足
+            </div>
+          )}
         </div>
-        
-        <div className="flex space-x-2">
-          <span className="px-3 py-1 bg-blue-100 text-blue-800 text-sm font-medium rounded">
-            📈 プロチャート
+
+        <div className="flex items-center space-x-3">
+          {/* プロ版時の時間足選択 */}
+          {isProChart && (
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-600">時間足:</span>
+              <select
+                value={selectedInterval}
+                onChange={(e) => setSelectedInterval(e.target.value)}
+                className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {TIME_INTERVALS.map(interval => (
+                  <option key={interval.value} value={interval.value}>
+                    {interval.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* チャート切り替えボタン */}
+          <button
+            onClick={() => setIsProChart(!isProChart)}
+            className={`px-3 py-1 text-sm font-medium rounded transition-colors ${
+              isProChart
+                ? 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+            }`}
+          >
+            {isProChart ? '📊 プロチャート' : '📈 軽量チャート'}
+          </button>
+
+          {/* 切り替えヒント */}
+          <span className="text-xs text-gray-500">
+            クリックで切り替え
           </span>
         </div>
       </div>
@@ -84,12 +147,21 @@ export default function TradingViewChart({ symbol, marketData }: TradingViewChar
       {/* フッター */}
       <div className="mt-4 flex justify-between items-center text-xs text-gray-500">
         <div className="flex items-center space-x-4">
-          <span>📊 TradingView チャート</span>
+          <span>📊 TradingView {isProChart ? 'プロ' : '軽量'}チャート</span>
           <span>🌐 リアルタイムデータ</span>
-          <span>📅 5分足表示</span>
+          {isProChart ? (
+            <span>📅 {TIME_INTERVALS.find(t => t.value === selectedInterval)?.label}足表示</span>
+          ) : (
+            <span>📈 シンプル表示</span>
+          )}
         </div>
-        <div>
+        <div className="flex items-center space-x-2">
           <span>Powered by TradingView</span>
+          {isProChart && (
+            <span className="px-2 py-1 bg-purple-50 text-purple-600 rounded">
+              高機能版
+            </span>
+          )}
         </div>
       </div>
     </div>

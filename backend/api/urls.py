@@ -7,7 +7,7 @@ router = DefaultRouter()
 
 # 各ViewSetをルーターに登録
 router.register(r'currencies', views.CurrencyViewSet)        # /api/currencies/
-router.register(r'market-data', views.MarketDataViewSet)     # /api/market-data/
+# market-dataは削除 - GMO APIから直接取得
 router.register(r'strategies', views.StrategyViewSet)        # /api/strategies/
 router.register(r'positions', views.PositionViewSet)        # /api/positions/
 router.register(r'trades', views.TradeViewSet)              # /api/trades/
@@ -17,20 +17,27 @@ router.register(r'performance', views.StrategyPerformanceViewSet)  # /api/perfor
 urlpatterns = [
     # DRF RouterのURL群を含める
     path('', include(router.urls)),
-    
-    # 将来的に追加する可能性のあるカスタムエンドポイント
-    # path('custom-endpoint/', views.custom_view, name='custom-endpoint'),
+
+    # GMO API プロキシエンドポイント（CORS回避用）
+    path('gmo/<str:endpoint>/', views.GMOProxyView.as_view(), name='gmo-proxy'),
 ]
 
 # 生成されるAPIエンドポイント一覧:
 # GET    /api/currencies/                    # 全通貨ペア取得
 # GET    /api/currencies/active/             # アクティブ通貨ペア取得
-# GET    /api/market-data/                   # 市場データ取得
-# GET    /api/market-data/latest/            # 最新価格取得
-# GET    /api/market-data/?currency=USD_JPY  # 通貨ペア指定で取得
+# 市場データ関連は削除 - GMO APIから直接取得
+# GET    /api/strategies/                    # 全戦略取得
+# GET    /api/strategies/active/             # アクティブ戦略取得
 # GET    /api/positions/                     # 全ポジション取得
 # GET    /api/positions/open/                # オープンポジション取得
 # GET    /api/positions/summary/             # ポジションサマリー取得
 # GET    /api/trades/                        # 全取引履歴取得
 # GET    /api/trades/recent/                 # 直近の取引履歴取得
 # GET    /api/performance/dashboard/         # ダッシュボード用成績取得
+#
+# GMO API プロキシ:
+# GET    /api/gmo/status/                    # GMO API ステータス
+# GET    /api/gmo/ticker/                    # GMO API レート情報
+# GET    /api/gmo/klines/                    # GMO API ローソク足
+# GET    /api/gmo/symbols/                   # GMO API 通貨ペア情報
+# GET    /api/gmo/orderbooks/                # GMO API 板情報

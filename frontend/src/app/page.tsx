@@ -2,12 +2,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  BarChart3, 
-  Activity, 
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  BarChart3,
+  Activity,
   Settings,
   Home,
   Target,
@@ -22,10 +22,10 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import dynamic from 'next/dynamic'
 
-// TradingViewチャートを動的インポート（SSR無効化）
+// コンポーネントを動的インポート（SSR無効化）
 const TradingViewChart = dynamic(
   () => import('../components/TradingViewChart'),
-  { 
+  {
     ssr: false,
     loading: () => (
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -39,6 +39,39 @@ const TradingViewChart = dynamic(
     )
   }
 )
+
+// GMOレート表示コンポーネントを動的インポート
+const RateDisplay = dynamic(
+  () => import('../components/RateDisplay'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+          <p className="text-gray-500">レートを取得中...</p>
+        </div>
+      </div>
+    )
+  }
+)
+
+// 高機能レート表示コンポーネントを動的インポート
+const AdvancedRateDisplay = dynamic(
+  () => import('../components/AdvancedRateDisplay'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+          <p className="text-gray-500">高機能レート表示を読み込み中...</p>
+        </div>
+      </div>
+    )
+  }
+)
+
 
 // APIからの市場データ型定義
 interface MarketData {
@@ -81,13 +114,11 @@ export default function TradingDashboard() {
   const [activeMenu, setActiveMenu] = useState('dashboard')
   const [selectedSymbol, setSelectedSymbol] = useState('USD_JPY')
 
-  // APIからデータを取得する関数
+  // APIからデータを取得する関数（自動売買データのみ）
   const fetchData = async () => {
     try {
-      // 最新市場データ取得
-      const marketResponse = await fetch('http://localhost:8000/api/market-data/latest/')
-      const marketData = await marketResponse.json()
-      setMarketData(marketData)
+      // 市場データは削除済み - GMO APIから直接取得
+      // setMarketData([]) // 空配列で初期化
 
       // オープンポジション取得
       const positionsResponse = await fetch('http://localhost:8000/api/positions/open/')
@@ -276,106 +307,72 @@ export default function TradingDashboard() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* 市場データ表示 */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-bold text-gray-800">リアルタイム価格</h2>
-                    <div className="flex items-center space-x-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      <Activity className="h-5 w-5 text-green-500" />
-                    </div>
+              {/* GMO APIから取得する高機能レート表示 */}
+              <div className="col-span-full mb-6">
+                <AdvancedRateDisplay
+                  initialInterval={10000}
+                  showSpread={true}
+                />
+              </div>
+
+              {/* リアルタイムチャート */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-gray-800">リアルタイムチャート</h2>
+                  <div className="flex items-center space-x-3">
+                    <select
+                      value={selectedSymbol}
+                      onChange={(e) => setSelectedSymbol(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="USD_JPY">USD/JPY</option>
+                      <option value="EUR_JPY">EUR/JPY</option>
+                      <option value="GBP_JPY">GBP/JPY</option>
+                      <option value="AUD_JPY">AUD/JPY</option>
+                      <option value="EUR_USD">EUR/USD</option>
+                    </select>
                   </div>
+                </div>
+                <TradingViewChart symbol={selectedSymbol} />
+              </div>
+
+              {/* オープンポジション */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h2 className="text-xl font-bold text-gray-800 mb-6">オープンポジション</h2>
+                {positions.length > 0 ? (
                   <div className="space-y-3">
-                    {marketData.map((market) => (
-                      <div key={market.id} className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
-                        <div>
-                          <div className="font-bold text-lg text-gray-800">{market.currency_symbol}</div>
-                          <div className="text-sm text-gray-500">
-                            スプレッド: {parseFloat(market.spread).toFixed(market.currency_symbol.includes('JPY') ? 3 : 5)}
+                    {positions.map((position) => (
+                      <div key={position.id} className="p-4 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <div className="font-bold text-gray-800">{position.currency_symbol}</div>
+                            <div className="text-sm text-gray-500">
+                              {position.side} {position.size.toLocaleString()}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              エントリー: {parseFloat(position.entry_price).toFixed(position.currency_symbol.includes('JPY') ? 3 : 5)}
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-sm text-red-600 font-medium">
-                            売値: {parseFloat(market.bid).toFixed(market.currency_symbol.includes('JPY') ? 3 : 5)}
-                          </div>
-                          <div className="text-sm text-green-600 font-medium">
-                            買値: {parseFloat(market.ask).toFixed(market.currency_symbol.includes('JPY') ? 3 : 5)}
-                          </div>
-                          <div className="font-bold text-gray-800">
-                            中値: {parseFloat(market.mid_price).toFixed(market.currency_symbol.includes('JPY') ? 3 : 5)}
+                          <div className="text-right">
+                            <div className="text-sm text-gray-600">
+                              現在価格: {position.current_price ? parseFloat(position.current_price).toFixed(position.currency_symbol.includes('JPY') ? 3 : 5) : '-'}
+                            </div>
+                            <div className={`font-bold ${position.current_pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              {position.current_pnl >= 0 ? '+' : ''}¥{position.current_pnl.toLocaleString()}
+                            </div>
                           </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
-
-                {/* ポジション一覧 */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h2 className="text-xl font-bold text-gray-800 mb-6">オープンポジション</h2>
-                  {positions.length > 0 ? (
-                    <div className="space-y-3">
-                      {positions.map((position) => (
-                        <div key={position.id} className="p-4 bg-gray-50 rounded-lg border border-gray-100">
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <div className="font-bold text-gray-800">{position.currency_symbol}</div>
-                              <div className="text-sm text-gray-500">
-                                {position.side} {position.size.toLocaleString()}
-                              </div>
-                              <div className="text-sm text-gray-600">
-                                エントリー: {parseFloat(position.entry_price).toFixed(position.currency_symbol.includes('JPY') ? 3 : 5)}
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm text-gray-600">
-                                現在価格: {position.current_price ? parseFloat(position.current_price).toFixed(position.currency_symbol.includes('JPY') ? 3 : 5) : '-'}
-                              </div>
-                              <div className={`font-bold ${position.current_pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {position.current_pnl >= 0 ? '+' : ''}¥{position.current_pnl.toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-400 py-8 bg-gray-50 rounded-lg">
-                      <Target className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-                      <p>現在オープンポジションはありません</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* TradingView リアルタイムチャート */}
-              <div className="col-span-full">
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-gray-800">リアルタイムチャート</h2>
-                    <div className="flex items-center space-x-3">
-                      <label className="text-sm font-medium text-gray-700">通貨ペア:</label>
-                      <select 
-                        value={selectedSymbol}
-                        onChange={(e) => setSelectedSymbol(e.target.value)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="USD_JPY">USD/JPY</option>
-                        <option value="EUR_JPY">EUR/JPY</option>
-                        <option value="GBP_JPY">GBP/JPY</option>
-                        <option value="EUR_USD">EUR/USD</option>
-                        <option value="GBP_USD">GBP/USD</option>
-                        <option value="AUD_USD">AUD/USD</option>
-                      </select>
-                    </div>
+                ) : (
+                  <div className="text-center text-gray-400 py-8 bg-gray-50 rounded-lg">
+                    <Target className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                    <p>現在オープンポジションはありません</p>
                   </div>
-                </div>
-                <TradingViewChart 
-                  symbol={selectedSymbol} 
-                  marketData={marketData}
-                />
+                )}
               </div>
+
             </div>
           )}
 

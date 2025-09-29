@@ -1,15 +1,72 @@
 from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django.utils import timezone
 from datetime import timedelta
-from .models import MarketData, GMOAPILog
+import requests
+import json
+# APIモデルは削除済み - GMO APIから直接取得
 from core.models import Currency
 from trading.models import Strategy, Position, Trade, StrategyPerformance
 from .serializers import (
-    CurrencySerializer, MarketDataSerializer, StrategySerializer,
+    CurrencySerializer, StrategySerializer,
     PositionSerializer, TradeSerializer, StrategyPerformanceSerializer
 )
+
+
+# GMO API プロキシビュー（CORS回避用）
+class GMOProxyView(APIView):
+    """
+    GMOコインPublic APIのプロキシエンドポイント
+    フロントエンドからのCORSエラーを回避するため、
+    バックエンド経由でGMO APIにアクセス
+    """
+
+    def get(self, request, endpoint):
+        """
+        GMO Public APIへのGETリクエストをプロキシ
+
+        Args:
+            endpoint: APIエンドポイント名（status, ticker, klines, symbols）
+        """
+        base_url = 'https://forex-api.coin.z.com/public/v1'
+
+        # エンドポイントマッピング
+        endpoints = {
+            'status': '/status',
+            'ticker': '/ticker',
+            'klines': '/klines',
+            'symbols': '/symbols',
+            'orderbooks': '/orderbooks'
+            # 注意: tradesはWebSocketのみでREST APIなし
+        }
+
+        if endpoint not in endpoints:
+            return Response(
+                {'error': f'Unknown endpoint: {endpoint}'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            # GMO APIへリクエスト
+            url = base_url + endpoints[endpoint]
+
+            # クエリパラメータをそのまま転送
+            params = request.query_params.dict()
+
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+
+            # GMOからのレスポンスをそのまま返す
+            return Response(response.json())
+
+        except requests.exceptions.RequestException as e:
+            return Response(
+                {'error': f'GMO API request failed: {str(e)}'},
+                status=status.HTTP_502_BAD_GATEWAY
+            )
+
 
 class CurrencyViewSet(viewsets.ModelViewSet):
     """通貨ペア管理API"""
@@ -23,41 +80,7 @@ class CurrencyViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(active_currencies, many=True)
         return Response(serializer.data)
 
-class MarketDataViewSet(viewsets.ModelViewSet):
-    """市場データAPI"""
-    queryset = MarketData.objects.all()
-    serializer_class = MarketDataSerializer
-    
-    def get_queryset(self):
-        """フィルタリング機能付きのクエリセット"""
-        queryset = MarketData.objects.all()
-        
-        # 通貨ペアでフィルタ
-        currency = self.request.query_params.get('currency', None)
-        if currency is not None:
-            queryset = queryset.filter(currency__symbol=currency)
-        
-        # 時間範囲でフィルタ
-        hours = self.request.query_params.get('hours', None)
-        if hours is not None:
-            start_time = timezone.now() - timedelta(hours=int(hours))
-            queryset = queryset.filter(timestamp__gte=start_time)
-        
-        return queryset.order_by('-timestamp')
-    
-    @action(detail=False, methods=['get'])
-    def latest(self, request):
-        """各通貨ペアの最新価格を取得"""
-        currencies = Currency.objects.filter(is_active=True)
-        latest_data = []
-        
-        for currency in currencies:
-            latest_market_data = MarketData.objects.filter(currency=currency).first()
-            if latest_market_data:
-                serializer = self.get_serializer(latest_market_data)
-                latest_data.append(serializer.data)
-        
-        return Response(latest_data)
+# MarketDataViewSetは削除 - GMO APIから直接取得するため不要
 
 class StrategyViewSet(viewsets.ModelViewSet):
     """取引戦略API"""
