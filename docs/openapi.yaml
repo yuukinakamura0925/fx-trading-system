@@ -1,0 +1,818 @@
+openapi: 3.0.3
+info:
+  title: GMO FX Trading System API
+  description: |
+    GMOコインFX自動売買システムのバックエンドAPI
+
+    ## 機能概要
+    - 通貨ペア管理
+    - KLine（ローソク足）データ管理
+    - 取引戦略管理
+    - ポジション管理
+    - 取引履歴管理
+    - GMO API プロキシ
+
+  version: 1.0.0
+  contact:
+    name: Backend API
+    url: http://localhost:8000
+
+servers:
+  - url: http://localhost:8000/api
+    description: ローカル開発環境
+
+tags:
+  - name: currencies
+    description: 通貨ペア管理
+  - name: klines
+    description: KLine（ローソク足）データ管理
+  - name: strategies
+    description: 取引戦略管理
+  - name: positions
+    description: ポジション管理
+  - name: trades
+    description: 取引履歴管理
+  - name: performance
+    description: 戦略成績管理
+  - name: gmo-proxy
+    description: GMO API プロキシ
+
+paths:
+  /currencies/:
+    get:
+      tags:
+        - currencies
+      summary: 通貨ペア一覧取得
+      description: 全ての通貨ペアを取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Currency'
+    post:
+      tags:
+        - currencies
+      summary: 通貨ペア作成
+      description: 新しい通貨ペアを作成
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CurrencyCreate'
+      responses:
+        '201':
+          description: 作成成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+
+  /currencies/active/:
+    get:
+      tags:
+        - currencies
+      summary: アクティブな通貨ペア取得
+      description: is_active=trueの通貨ペアのみ取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Currency'
+
+  /currencies/{id}/:
+    get:
+      tags:
+        - currencies
+      summary: 通貨ペア詳細取得
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Currency'
+
+  /klines/:
+    get:
+      tags:
+        - klines
+      summary: KLineデータ一覧取得
+      description: |
+        KLineデータを取得（フィルタリング可能）
+
+        クエリパラメータで柔軟にフィルタ可能
+      parameters:
+        - name: symbol
+          in: query
+          description: 通貨ペアシンボル（例 USD_JPY）
+          schema:
+            type: string
+            example: "USD_JPY"
+        - name: price_type
+          in: query
+          description: 価格タイプ
+          schema:
+            type: string
+            enum: [BID, ASK]
+            example: "ASK"
+        - name: interval
+          in: query
+          description: 時間足
+          schema:
+            type: string
+            enum: ["1min", "5min", "10min", "15min", "30min", "1hour", "4hour", "8hour", "12hour", "1day", "1week", "1month"]
+            example: "1min"
+        - name: start_time
+          in: query
+          description: 開始時刻（ISO8601形式）
+          schema:
+            type: string
+            format: date-time
+            example: "2025-09-30T00:00:00Z"
+        - name: end_time
+          in: query
+          description: 終了時刻（ISO8601形式）
+          schema:
+            type: string
+            format: date-time
+            example: "2025-09-30T23:59:59Z"
+        - name: limit
+          in: query
+          description: 取得件数制限
+          schema:
+            type: integer
+            example: 100
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KLine'
+
+  /klines/fetch_from_gmo/:
+    post:
+      tags:
+        - klines
+      summary: GMO APIからKLineデータ取得・保存
+      description: |
+        GMO Coin Public APIからKLineデータを取得してデータベースに保存
+
+        **dateパラメータの指定方法:**
+        - YYYYMMDD形式: 1min, 5min, 10min, 15min, 30min, 1hour のみ
+        - YYYY形式: 4hour, 8hour, 12hour, 1day, 1week, 1month のみ
+
+        **制限事項:**
+        - 20231028以降のデータのみ取得可能（YYYYMMDD指定時）
+        - 日本時間朝6:00に新しい日付に切替
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - symbol
+                - price_type
+                - interval
+                - date
+              properties:
+                symbol:
+                  type: string
+                  description: 通貨ペアシンボル
+                  example: "USD_JPY"
+                price_type:
+                  type: string
+                  description: 価格タイプ
+                  enum: [BID, ASK]
+                  example: "ASK"
+                interval:
+                  type: string
+                  description: 時間足
+                  enum: ["1min", "5min", "10min", "15min", "30min", "1hour", "4hour", "8hour", "12hour", "1day", "1week", "1month"]
+                  example: "1min"
+                date:
+                  type: string
+                  description: 日付（YYYYMMDD or YYYY形式）
+                  example: "20250930"
+      responses:
+        '200':
+          description: 取得・保存成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Successfully fetched and saved 645 KLine records"
+                  total_received:
+                    type: integer
+                    example: 645
+                  saved:
+                    type: integer
+                    example: 645
+                  skipped:
+                    type: integer
+                    example: 0
+        '400':
+          description: パラメータ不正
+        '404':
+          description: 通貨ペアが存在しない
+        '502':
+          description: GMO APIエラー
+
+  /strategies/:
+    get:
+      tags:
+        - strategies
+      summary: 取引戦略一覧取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Strategy'
+
+  /strategies/active/:
+    get:
+      tags:
+        - strategies
+      summary: アクティブな戦略取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Strategy'
+
+  /positions/:
+    get:
+      tags:
+        - positions
+      summary: ポジション一覧取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Position'
+
+  /positions/open/:
+    get:
+      tags:
+        - positions
+      summary: オープンポジション取得
+      description: status=OPENのポジションのみ取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Position'
+
+  /positions/summary/:
+    get:
+      tags:
+        - positions
+      summary: ポジションサマリー取得
+      description: オープンポジションの集計情報を取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_positions:
+                    type: integer
+                    description: 総ポジション数
+                    example: 5
+                  total_unrealized_pnl:
+                    type: number
+                    description: 未実現損益合計
+                    example: 12500.50
+                  long_positions:
+                    type: integer
+                    description: ロングポジション数
+                    example: 3
+                  short_positions:
+                    type: integer
+                    description: ショートポジション数
+                    example: 2
+
+  /trades/:
+    get:
+      tags:
+        - trades
+      summary: 取引履歴一覧取得
+      parameters:
+        - name: strategy
+          in: query
+          description: 戦略名でフィルタ
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: ステータスでフィルタ
+          schema:
+            type: string
+            enum: [PENDING, EXECUTED, CANCELLED, FAILED]
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Trade'
+
+  /trades/recent/:
+    get:
+      tags:
+        - trades
+      summary: 直近の取引履歴取得
+      parameters:
+        - name: days
+          in: query
+          description: 過去何日分を取得するか
+          schema:
+            type: integer
+            default: 7
+            example: 7
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Trade'
+
+  /performance/:
+    get:
+      tags:
+        - performance
+      summary: 戦略成績一覧取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StrategyPerformance'
+
+  /performance/dashboard/:
+    get:
+      tags:
+        - performance
+      summary: ダッシュボード用成績サマリー取得
+      description: 過去30日間の戦略別成績サマリー
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    total_trades:
+                      type: integer
+                    total_pnl:
+                      type: number
+                    win_rate:
+                      type: number
+                    best_day:
+                      type: number
+                    worst_day:
+                      type: number
+
+  /gmo/status/:
+    get:
+      tags:
+        - gmo-proxy
+      summary: GMO FXステータス取得
+      description: GMO Coin Public APIのプロキシ - FX稼働状態を取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: integer
+                    example: 0
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        enum: [OPEN, CLOSE, MAINTENANCE]
+                        example: OPEN
+                  responsetime:
+                    type: string
+                    example: "2025-09-30T07:15:06.001Z"
+
+  /gmo/ticker/:
+    get:
+      tags:
+        - gmo-proxy
+      summary: 最新レート取得
+      description: GMO Coin Public APIのプロキシ - 全銘柄の最新レートを取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: integer
+                    example: 0
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        symbol:
+                          type: string
+                          example: "USD_JPY"
+                        ask:
+                          type: string
+                          example: "148.014"
+                        bid:
+                          type: string
+                          example: "148.002"
+                        timestamp:
+                          type: string
+                          example: "2025-09-30T07:44:56.789Z"
+                        status:
+                          type: string
+                          enum: [OPEN, CLOSE]
+                          example: "OPEN"
+
+  /gmo/klines/:
+    get:
+      tags:
+        - gmo-proxy
+      summary: KLineデータ取得（プロキシ）
+      description: GMO Coin Public APIのプロキシ - KLineデータを直接取得（DBに保存しない）
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "USD_JPY"
+        - name: priceType
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [BID, ASK]
+            example: "ASK"
+        - name: interval
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "1min"
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            example: "20250930"
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: integer
+                    example: 0
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        openTime:
+                          type: string
+                          example: "1618588800000"
+                        open:
+                          type: string
+                          example: "141.365"
+                        high:
+                          type: string
+                          example: "141.368"
+                        low:
+                          type: string
+                          example: "141.360"
+                        close:
+                          type: string
+                          example: "141.362"
+                  responsetime:
+                    type: string
+                    example: "2023-07-08T22:28:07.980Z"
+
+  /gmo/symbols/:
+    get:
+      tags:
+        - gmo-proxy
+      summary: 取引ルール取得
+      description: GMO Coin Public APIのプロキシ - 取引ルール（最小注文数量等）を取得
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: integer
+                    example: 0
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        symbol:
+                          type: string
+                          example: USD_JPY
+                        minOpenOrderSize:
+                          type: string
+                          example: "10000"
+                        maxOrderSize:
+                          type: string
+                          example: "500000"
+                        sizeStep:
+                          type: string
+                          example: "1"
+                        tickSize:
+                          type: string
+                          example: "0.001"
+
+components:
+  schemas:
+    Currency:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        symbol:
+          type: string
+          description: 通貨ペアシンボル
+          example: "USD_JPY"
+        display_name:
+          type: string
+          description: 表示名
+          example: ""
+        is_active:
+          type: boolean
+          description: アクティブフラグ
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-09-30T16:44:12.707642+09:00"
+
+    CurrencyCreate:
+      type: object
+      required:
+        - symbol
+      properties:
+        symbol:
+          type: string
+          example: USD_JPY
+        name:
+          type: string
+          example: "米ドル/日本円"
+        base_currency:
+          type: string
+          example: USD
+        quote_currency:
+          type: string
+          example: JPY
+        is_active:
+          type: boolean
+          example: true
+
+    KLine:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 645
+        currency:
+          type: integer
+          description: 通貨ペアID
+          example: 1
+        currency_symbol:
+          type: string
+          description: 通貨ペアシンボル
+          example: USD_JPY
+        price_type:
+          type: string
+          description: 価格タイプ
+          enum: [BID, ASK]
+          example: "ASK"
+        interval:
+          type: string
+          description: 時間足
+          enum: ["1min", "5min", "10min", "15min", "30min", "1hour", "4hour", "8hour", "12hour", "1day", "1week", "1month"]
+          example: "1min"
+        open_time:
+          type: string
+          format: date-time
+          description: 開始時刻
+          example: "2025-09-30T16:44:00+09:00"
+        open:
+          type: string
+          description: 始値
+          example: "148.01400"
+        high:
+          type: string
+          description: 高値
+          example: "148.03100"
+        low:
+          type: string
+          description: 安値
+          example: "148.01400"
+        close:
+          type: string
+          description: 終値
+          example: "148.03000"
+        created_at:
+          type: string
+          format: date-time
+          description: データ登録日時
+          example: "2025-09-30T16:44:45.686159+09:00"
+
+    Strategy:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Position:
+      type: object
+      properties:
+        id:
+          type: integer
+        strategy:
+          type: integer
+        strategy_name:
+          type: string
+        currency:
+          type: integer
+        currency_symbol:
+          type: string
+        side:
+          type: string
+          enum: [BUY, SELL]
+        size:
+          type: string
+        entry_price:
+          type: string
+        current_price:
+          type: string
+        stop_loss:
+          type: string
+        take_profit:
+          type: string
+        unrealized_pnl:
+          type: string
+        current_pnl:
+          type: number
+        status:
+          type: string
+          enum: [OPEN, CLOSED]
+        opened_at:
+          type: string
+          format: date-time
+        closed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Trade:
+      type: object
+      properties:
+        id:
+          type: integer
+        position:
+          type: integer
+          nullable: true
+        strategy:
+          type: integer
+        strategy_name:
+          type: string
+        currency:
+          type: integer
+        currency_symbol:
+          type: string
+        side:
+          type: string
+          enum: [BUY, SELL]
+        size:
+          type: string
+        price:
+          type: string
+        order_type:
+          type: string
+          enum: [MARKET, LIMIT, STOP]
+        status:
+          type: string
+          enum: [PENDING, EXECUTED, CANCELLED, FAILED]
+        profit_loss:
+          type: string
+        commission:
+          type: string
+        execution_time:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    StrategyPerformance:
+      type: object
+      properties:
+        id:
+          type: integer
+        strategy:
+          type: integer
+        strategy_name:
+          type: string
+        date:
+          type: string
+          format: date
+        total_trades:
+          type: integer
+        winning_trades:
+          type: integer
+        losing_trades:
+          type: integer
+        total_pnl:
+          type: string
+        max_drawdown:
+          type: string
+        win_rate:
+          type: string
+        created_at:
+          type: string
+          format: date-time

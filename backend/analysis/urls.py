@@ -11,10 +11,14 @@ from .views import (
     HealthCheckView,
     MultiTimeFrameAnalysisView
 )
+from .tfqe_views import TFQESignalView
 
 app_name = 'analysis'
 
 urlpatterns = [
+    # TFQE戦略シグナル（メイン）
+    path('tfqe-signal/', TFQESignalView.as_view(), name='tfqe-signal'),
+
     # メイン分析エンドポイント
     path('analyze/', FXAnalysisView.as_view(), name='analyze'),
 
@@ -35,9 +39,9 @@ urlpatterns = [
 ]
 
 # 生成されるエンドポイント:
-# POST http://localhost:8000/api/analysis/analyze/         # シンプル分析実行
-# POST http://localhost:8000/api/analysis/multi-timeframe/ # マルチタイムフレーム分析
-# GET  http://localhost:8000/api/analysis/current-price/   # 現在価格
-# POST http://localhost:8000/api/analysis/historical/      # 過去データ
-# GET  http://localhost:8000/api/analysis/supported-pairs/ # 通貨ペア一覧
-# GET  http://localhost:8000/api/analysis/health/          # ヘルスチェック
+# POST http://localhost:8000/api/analysis/analyze/            # シンプル分析実行
+# POST http://localhost:8000/api/analysis/multi-timeframe/    # マルチタイムフレーム分析
+# GET  http://localhost:8000/api/analysis/current-price/      # 現在価格
+# POST http://localhost:8000/api/analysis/historical/         # 過去データ
+# GET  http://localhost:8000/api/analysis/supported-pairs/    # 通貨ペア一覧
+# GET  http://localhost:8000/api/analysis/health/             # ヘルスチェック

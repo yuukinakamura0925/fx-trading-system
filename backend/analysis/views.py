@@ -317,7 +317,7 @@ class HealthCheckView(views.APIView):
 
 class MultiTimeFrameAnalysisView(views.APIView):
     """
-    マルチタイムフレーム分析を実行するAPIビュー
+    マルチタイムフレームの過去データを取得するAPIビュー
 
     POST /api/analysis/multi-timeframe/
     {
@@ -328,7 +328,7 @@ class MultiTimeFrameAnalysisView(views.APIView):
     permission_classes = [AllowAny]  # 開発中は認証なし
 
     def post(self, request):
-        """マルチタイムフレーム分析リクエストを処理"""
+        """マルチタイムフレームデータ取得リクエストを処理"""
 
         # パラメータ取得
         symbol = request.data.get('symbol', 'USDJPY=X')
@@ -347,20 +347,19 @@ class MultiTimeFrameAnalysisView(views.APIView):
         readable_name = symbol_names.get(symbol, symbol)
 
         try:
-            logger.info(f"マルチタイムフレーム分析開始: {readable_name}")
+            logger.info(f"過去データ取得開始: {readable_name}")
 
-            # マルチタイムフレームアナライザーを初期化
-            analyzer = MultiTimeFrameAnalyzer()
-
-            # 分析実行
-            result = analyzer.analyze_all_timeframes(symbol)
+            # データ取得
+            from .data_fetcher import DataFetcher
+            fetcher = DataFetcher()
+            result = fetcher.fetch_all_timeframes(symbol)
 
             # エラーチェック
             if "error" in result:
-                logger.error(f"分析エラー: {result['error']}")
+                logger.error(f"データ取得エラー: {result['error']}")
                 return Response(
                     {
-                        "error": "分析中にエラーが発生しました",
+                        "error": "データ取得中にエラーが発生しました",
                         "detail": result['error'],
                         "timestamp": datetime.now().isoformat()
                     },
@@ -368,14 +367,22 @@ class MultiTimeFrameAnalysisView(views.APIView):
                 )
 
             # 成功レスポンス
-            logger.info(f"マルチタイムフレーム分析完了: {readable_name}")
+            logger.info(f"過去データ取得完了: {readable_name}")
+
+            # メタ情報を追加
+            result['api_info'] = {
+                'source': 'GMO Coin FX API',
+                'rate_limit': 'Public API（制限緩い）',
+                'note': '常に最新データを取得'
+            }
+
             return Response(result, status=status.HTTP_200_OK)
 
         except Exception as e:
-            logger.error(f"マルチタイムフレーム分析エラー: {str(e)}", exc_info=True)
+            logger.error(f"データ取得エラー: {str(e)}", exc_info=True)
             return Response(
                 {
-                    "error": "分析中にエラーが発生しました",
+                    "error": "データ取得中にエラーが発生しました",
                     "detail": str(e),
                     "timestamp": datetime.now().isoformat()
                 },

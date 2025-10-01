@@ -2,6 +2,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import {
   TrendingUp,
   TrendingDown,
@@ -17,7 +19,8 @@ import {
   User,
   LogOut,
   Menu,
-  X
+  X,
+  Search
 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import dynamic from 'next/dynamic'
@@ -88,6 +91,22 @@ const FXAnalysisStrategy = dynamic(
   }
 )
 
+// TFQEシグナルウィジェットを動的インポート
+const TFQESignalWidget = dynamic(
+  () => import('../components/TFQESignalWidget'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+        <div className="flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mr-3"></div>
+          <p className="text-gray-400">TFQE戦略を読み込み中...</p>
+        </div>
+      </div>
+    )
+  }
+)
+
 
 // APIからの市場データ型定義
 interface MarketData {
@@ -121,13 +140,14 @@ interface PositionSummary {
 }
 
 export default function TradingDashboard() {
+  const pathname = usePathname()
+
   // ステート管理
   const [marketData, setMarketData] = useState<MarketData[]>([])
   const [positions, setPositions] = useState<Position[]>([])
   const [summary, setSummary] = useState<PositionSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
-  const [activeMenu, setActiveMenu] = useState('dashboard')
   const [selectedSymbol, setSelectedSymbol] = useState('USD_JPY')
 
   // APIからデータを取得する関数（自動売買データのみ）
@@ -172,11 +192,10 @@ export default function TradingDashboard() {
 
   // サイドメニューの項目
   const menuItems = [
-    { id: 'dashboard', label: 'ダッシュボード', icon: Home },
-    { id: 'positions', label: 'ポジション', icon: Target },
-    { id: 'strategies', label: '戦略', icon: PieChart },
-    { id: 'reports', label: 'レポート', icon: FileText },
-    { id: 'settings', label: '設定', icon: Settings },
+    { id: 'dashboard', label: 'ダッシュボード', icon: Home, href: '/' },
+    { id: 'positions', label: 'ポジション', icon: Target, href: '/positions' },
+    { id: 'reports', label: 'レポート', icon: FileText, href: '/reports' },
+    { id: 'settings', label: '設定', icon: Settings, href: '/settings' },
   ]
 
   return (
@@ -205,19 +224,20 @@ export default function TradingDashboard() {
         <nav className="mt-6 px-3">
           {menuItems.map((item) => {
             const Icon = item.icon
+            const isActive = pathname === item.href
             return (
-              <button
+              <Link
                 key={item.id}
-                onClick={() => setActiveMenu(item.id)}
+                href={item.href}
                 className={`w-full flex items-center px-3 py-3 mb-2 rounded-lg text-left transition-colors ${
-                  activeMenu === item.id
+                  isActive
                     ? 'bg-blue-50 text-blue-600 border-r-2 border-blue-600'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'
                 }`}
               >
                 <Icon className={`h-5 w-5 ${sidebarOpen ? 'mr-3' : 'mx-auto'}`} />
                 {sidebarOpen && <span className="font-medium">{item.label}</span>}
-              </button>
+              </Link>
             )
           })}
         </nav>
@@ -247,7 +267,7 @@ export default function TradingDashboard() {
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shadow-sm">
           <div>
             <h1 className="text-2xl font-bold text-gray-800">
-              {menuItems.find(item => item.id === activeMenu)?.label || 'ダッシュボード'}
+              {menuItems.find(item => item.href === pathname)?.label || 'ダッシュボード'}
             </h1>
             <p className="text-sm text-gray-500">
               最終更新: {new Date().toLocaleTimeString('ja-JP')}
@@ -266,8 +286,7 @@ export default function TradingDashboard() {
 
         {/* メインコンテンツ */}
         <main className="flex-1 p-6 bg-gray-50">
-          {activeMenu === 'dashboard' && (
-            <div className="space-y-6">
+          <div className="space-y-6">
               {/* サマリーカード */}
               {summary && (
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -331,6 +350,11 @@ export default function TradingDashboard() {
                 />
               </div>
 
+              {/* TFQE戦略シグナル（メイン）*/}
+              <div className="col-span-full mb-6">
+                <TFQESignalWidget />
+              </div>
+
               {/* リアルタイムチャート */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="flex justify-between items-center mb-6">
@@ -390,36 +414,6 @@ export default function TradingDashboard() {
               </div>
 
             </div>
-          )}
-
-          {/* 他のメニュー項目のプレースホルダー */}
-          {activeMenu === 'positions' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <Target className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-800 mb-2">ポジション管理</h3>
-              <p className="text-gray-500">ポジション管理機能は開発中です</p>
-            </div>
-          )}
-
-          {activeMenu === 'strategies' && (
-            <FXAnalysisStrategy />
-          )}
-
-          {activeMenu === 'reports' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-800 mb-2">レポート</h3>
-              <p className="text-gray-500">レポート機能は開発中です</p>
-            </div>
-          )}
-
-          {activeMenu === 'settings' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
-              <Settings className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-gray-800 mb-2">設定</h3>
-              <p className="text-gray-500">設定機能は開発中です</p>
-            </div>
-          )}
         </main>
       </div>
     </div>

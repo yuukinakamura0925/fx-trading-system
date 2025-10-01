@@ -9,16 +9,15 @@
 - 超短期戦略: 5分足（スキャルピング、数分〜数時間）
 """
 
-import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
-import openai
 import os
 import json
+from .gmo_client import GMOFXClient
 
 class TimeFrame(Enum):
     """時間軸の定義"""
@@ -64,33 +63,36 @@ class MultiTimeFrameAnalyzer:
         # 一時的に無効化（コスト削減のため）
         self.llm_enabled = False  # bool(self.openai_api_key)
 
+        # GMO APIクライアント初期化
+        self.gmo_client = GMOFXClient()
+
         # if self.llm_enabled:
         #     # 新しいOpenAI client初期化
         #     from openai import OpenAI
         #     self.openai_client = OpenAI(api_key=self.openai_api_key)
 
-        # 時間軸設定
+        # 時間軸設定（GMO APIの取得可能範囲に合わせて調整）
         self.timeframes = {
             TimeFrame.ULTRA_SHORT: {
-                "period": "1d",
+                "days": 1,           # 1日分
                 "interval": "5m",
                 "style": TradingStyle.SCALPING,
                 "description": "5分足スキャルピング"
             },
             TimeFrame.SHORT: {
-                "period": "5d",
+                "days": 5,           # 5日分
                 "interval": "1h",
                 "style": TradingStyle.DAY_TRADING,
                 "description": "1時間足デイトレード"
             },
             TimeFrame.MEDIUM: {
-                "period": "1mo",
+                "days": 7,           # 7日分（GMO API制限対策）
                 "interval": "4h",
                 "style": TradingStyle.POSITION_TRADING,
                 "description": "4時間足ポジショントレード"
             },
             TimeFrame.LONG: {
-                "period": "3mo",
+                "days": 10,          # 10日分（GMO API制限対策）
                 "interval": "1d",
                 "style": TradingStyle.SWING_TRADING,
                 "description": "日足スイングトレード"
@@ -143,22 +145,42 @@ class MultiTimeFrameAnalyzer:
             return {"error": str(e)}
 
     def _analyze_timeframe(self, symbol: str, timeframe: TimeFrame, config: Dict) -> Dict[str, Any]:
-        """単一時間軸での分析"""
+        """単一時間軸での分析（GMO API使用）"""
 
-        # データ取得
-        data = yf.download(
-            symbol,
-            period=config["period"],
-            interval=config["interval"],
-            progress=False
-        )
+        import logging
+        logger = logging.getLogger(__name__)
 
-        if data.empty:
-            return {"error": f"データ取得失敗: {timeframe.value}"}
+        try:
+            # シンボル変換（USDJPY=X -> USD_JPY）
+            gmo_symbol = symbol.replace("=X", "").replace("JPY", "_JPY").replace("USD", "USD")
+            if "_" not in gmo_symbol:
+                gmo_symbol = f"{gmo_symbol[:3]}_{gmo_symbol[3:]}"
 
-        # MultiIndex対応
-        if isinstance(data.columns, pd.MultiIndex):
-            data.columns = data.columns.get_level_values(0)
+            logger.info(f"データ取得開始: {gmo_symbol} {timeframe.value} (days={config['days']}, interval={config['interval']})")
+
+            # GMO APIからデータ取得
+            data = self.gmo_client.get_klines_multi_days(
+                symbol=gmo_symbol,
+                interval=config["interval"],
+                days=config["days"],
+                price_type="ASK"
+            )
+
+            logger.info(f"データ取得完了: {gmo_symbol} {timeframe.value} - {len(data)} rows")
+
+            if data.empty:
+                return {
+                    "error": f"データ取得失敗: {timeframe.value}",
+                    "details": f"GMO APIからデータを取得できませんでした (symbol={gmo_symbol}, days={config['days']}, interval={config['interval']})"
+                }
+
+        except Exception as e:
+            # 例外が発生した場合
+            logger.error(f"データ取得例外: {symbol} {timeframe.value} - {str(e)}")
+            return {
+                "error": f"データ取得エラー: {timeframe.value}",
+                "details": str(e)
+            }
 
         # 基本分析
         analysis_result = self._perform_technical_analysis(data, timeframe)
@@ -178,6 +200,307 @@ class MultiTimeFrameAnalyzer:
             "strategy": timeframe_strategy,
             "data_points": len(data)
         }
+
+    def _format_patterns(self, patterns: List) -> List[Dict]:
+        """パターン情報をJSON形式にフォーマット"""
+        formatted = []
+        for pattern in patterns[:3]:  # 上位3パターンのみ
+            formatted.append({
+                "type": pattern.type.value,
+                "confidence": pattern.confidence,
+                "prediction": pattern.prediction,
+                "target_price": pattern.target_price,
+                "stop_loss": pattern.stop_loss,
+                "description": pattern.description,
+                "key_levels": pattern.key_levels
+            })
+        return formatted
+
+    def _predict_next_move(self, analysis: Dict, patterns: List, timeframe: TimeFrame) -> Dict[str, Any]:
+        """
+        次の動きを予測（パターン + テクニカル指標の統合分析）
+
+        Args:
+            analysis: テクニカル分析結果
+            patterns: 検出されたチャートパターン
+            timeframe: 時間軸
+
+        Returns:
+            次の動き予測情報
+        """
+
+        current_price = analysis["current_price"]
+        trend = analysis["trend"]
+        rsi = analysis["rsi"]
+        signal = analysis["signal"]
+        confidence = analysis["confidence"]
+
+        # 時間軸ごとの予測期間と期待変動幅
+        timeframe_config = {
+            TimeFrame.ULTRA_SHORT: {
+                "period": "今後15-30分",
+                "expected_move_pct": 0.1,  # 0.1%
+                "volatility_factor": 1.5
+            },
+            TimeFrame.SHORT: {
+                "period": "今後2-4時間",
+                "expected_move_pct": 0.3,  # 0.3%
+                "volatility_factor": 1.2
+            },
+            TimeFrame.MEDIUM: {
+                "period": "今後12-24時間",
+                "expected_move_pct": 0.8,  # 0.8%
+                "volatility_factor": 1.0
+            },
+            TimeFrame.LONG: {
+                "period": "今後3-7日",
+                "expected_move_pct": 2.0,  # 2%
+                "volatility_factor": 0.8
+            }
+        }
+
+        config = timeframe_config[timeframe]
+        period_text = config["period"]
+        base_move_pct = config["expected_move_pct"]
+
+        # === パターンベースの予測 ===
+        pattern_predictions = []
+        pattern_bias = "中立"  # 上昇 / 下降 / 中立
+        pattern_target = None
+        pattern_confidence_boost = 0
+
+        if patterns:
+            # 信頼度の高いパターンから分析
+            top_patterns = sorted(patterns, key=lambda p: p.confidence, reverse=True)[:2]
+
+            for pattern in top_patterns:
+                pred_direction = "上昇" if "上昇" in pattern.prediction or "買い" in pattern.prediction or "反発" in pattern.prediction else \
+                                 "下降" if "下降" in pattern.prediction or "売り" in pattern.prediction or "反落" in pattern.prediction else \
+                                 "様子見"
+
+                pattern_predictions.append({
+                    "pattern_name": pattern.type.value,
+                    "direction": pred_direction,
+                    "confidence": pattern.confidence,
+                    "target": pattern.target_price,
+                    "reason": pattern.description
+                })
+
+                # パターンの方向性を判定（最も信頼度の高いパターンを採用）
+                if pattern == top_patterns[0]:
+                    pattern_bias = pred_direction
+                    pattern_target = pattern.target_price
+                    # パターン信頼度が高い場合、全体の信頼度をブースト
+                    if pattern.confidence > 75:
+                        pattern_confidence_boost = 10
+                    elif pattern.confidence > 65:
+                        pattern_confidence_boost = 5
+
+        # === テクニカル指標ベースの予測 ===
+        # 1. 基本方向性の決定（パターンとシグナルの統合）
+        if pattern_bias == "上昇" and signal == "BUY":
+            final_direction = "上昇"
+            direction_confidence = min(100, confidence + pattern_confidence_boost + 10)  # 一致でブースト
+        elif pattern_bias == "下降" and signal == "SELL":
+            final_direction = "下降"
+            direction_confidence = min(100, confidence + pattern_confidence_boost + 10)
+        elif pattern_bias != "中立" and pattern_bias != "様子見":
+            # パターンとシグナルが不一致の場合
+            final_direction = pattern_bias  # パターンを優先
+            direction_confidence = max(40, confidence - 10)  # 信頼度は下げる
+        elif signal == "BUY":
+            final_direction = "上昇"
+            direction_confidence = confidence
+        elif signal == "SELL":
+            final_direction = "下降"
+            direction_confidence = confidence
+        else:
+            final_direction = "横ばい"
+            direction_confidence = confidence
+
+        # 2. 目標価格の計算
+        if pattern_target:
+            # パターンの目標価格を優先
+            target_price = pattern_target
+        else:
+            # テクニカル指標から算出
+            if final_direction == "上昇":
+                target_price = current_price * (1 + base_move_pct / 100)
+            elif final_direction == "下降":
+                target_price = current_price * (1 - base_move_pct / 100)
+            else:
+                target_price = current_price
+
+        # 3. サポート/レジスタンスレベル
+        if final_direction == "上昇":
+            support_level = current_price * (1 - base_move_pct / 200)  # 半分の変動幅
+            resistance_level = target_price * 1.001
+        elif final_direction == "下降":
+            support_level = target_price * 0.999
+            resistance_level = current_price * (1 + base_move_pct / 200)
+        else:
+            support_level = current_price * 0.998
+            resistance_level = current_price * 1.002
+
+        # 4. RSIとトレンドからの追加洞察
+        rsi_insight = ""
+        if rsi > 70:
+            rsi_insight = "⚠️ RSI過熱（70超）: 調整の可能性あり"
+            if final_direction == "上昇":
+                rsi_insight += "。上昇継続には強い買い圧力が必要"
+        elif rsi < 30:
+            rsi_insight = "⚠️ RSI売られすぎ（30未満）: 反発の可能性あり"
+            if final_direction == "下降":
+                rsi_insight += "。下落継続には強い売り圧力が必要"
+        elif 45 <= rsi <= 55:
+            rsi_insight = "RSI中立（45-55）: 明確な方向感なし"
+        else:
+            rsi_insight = f"RSI {rsi:.1f}: 健全な水準"
+
+        trend_insight = ""
+        if trend == "上昇":
+            if final_direction == "上昇":
+                trend_insight = "✅ トレンドフォロー: 上昇トレンド継続中"
+            elif final_direction == "下降":
+                trend_insight = "⚠️ トレンド転換の兆候: 上昇→下降へ転換の可能性"
+            else:
+                trend_insight = "上昇トレンド中の調整局面"
+        elif trend == "下降":
+            if final_direction == "下降":
+                trend_insight = "✅ トレンドフォロー: 下降トレンド継続中"
+            elif final_direction == "上昇":
+                trend_insight = "⚠️ トレンド転換の兆候: 下降→上昇へ転換の可能性"
+            else:
+                trend_insight = "下降トレンド中の調整局面"
+        else:  # レンジ
+            trend_insight = "📊 レンジ相場: ブレイクアウト待ち"
+
+        # 5. 信頼度レベルの文字列化
+        if direction_confidence > 75:
+            confidence_text = "高"
+            confidence_emoji = "🟢"
+        elif direction_confidence > 55:
+            confidence_text = "中"
+            confidence_emoji = "🟡"
+        else:
+            confidence_text = "低"
+            confidence_emoji = "🔴"
+
+        # 6. 総合サマリーの生成
+        summary_parts = [
+            f"{period_text}は{final_direction}方向",
+            f"目標{target_price:.3f}付近",
+            f"信頼度{direction_confidence:.0f}%（{confidence_text}）"
+        ]
+
+        if pattern_predictions:
+            summary_parts.append(f"パターン: {pattern_predictions[0]['pattern_name']}")
+
+        summary = "。".join(summary_parts)
+
+        # 7. シナリオ分析（複数のシナリオ提示）
+        scenarios = []
+
+        # メインシナリオ
+        scenarios.append({
+            "name": "メインシナリオ",
+            "probability": direction_confidence,
+            "direction": final_direction,
+            "target": round(target_price, 3),
+            "description": f"{final_direction}トレンド継続。{target_price:.3f}を目指す展開"
+        })
+
+        # 代替シナリオ（逆方向）
+        if final_direction == "上昇":
+            alt_direction = "下降"
+            alt_target = current_price * (1 - base_move_pct / 100)
+            alt_probability = 100 - direction_confidence
+        elif final_direction == "下降":
+            alt_direction = "上昇"
+            alt_target = current_price * (1 + base_move_pct / 100)
+            alt_probability = 100 - direction_confidence
+        else:
+            alt_direction = "ブレイクアウト"
+            alt_target = current_price
+            alt_probability = 40
+
+        scenarios.append({
+            "name": "代替シナリオ",
+            "probability": alt_probability,
+            "direction": alt_direction,
+            "target": round(alt_target, 3),
+            "description": f"予想外の{alt_direction}。{alt_target:.3f}方向への動き"
+        })
+
+        # 結果を返す
+        return {
+            "direction": final_direction,
+            "confidence": round(direction_confidence, 1),
+            "confidence_level": confidence_text,
+            "confidence_emoji": confidence_emoji,
+            "period": period_text,
+            "current_price": round(current_price, 3),
+            "target_price": round(target_price, 3),
+            "support_level": round(support_level, 3),
+            "resistance_level": round(resistance_level, 3),
+            "expected_move_pct": base_move_pct,
+            "rsi_insight": rsi_insight,
+            "trend_insight": trend_insight,
+            "pattern_insights": pattern_predictions,
+            "scenarios": scenarios,
+            "summary": summary
+        }
+
+    def _evaluate_with_strategies(
+        self,
+        analysis: Dict[str, Any],
+        patterns: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """
+        全ての登録戦略でシグナルを評価
+
+        Args:
+            analysis: テクニカル分析結果
+            patterns: 検出されたパターン
+
+        Returns:
+            各戦略での評価結果リスト
+        """
+
+        evaluations = []
+
+        # 全戦略を評価
+        for strategy_name in strategy_engine.strategies.keys():
+            evaluation = strategy_engine.evaluate_signal(
+                strategy_name,
+                analysis,
+                patterns
+            )
+
+            # エラーがなければ追加
+            if "error" not in evaluation:
+                evaluations.append({
+                    "strategy_name": strategy_name,
+                    "should_enter": evaluation["should_enter"],
+                    "signal": evaluation["signal"],
+                    "strength": evaluation["strength"].name if hasattr(evaluation["strength"], "name") else str(evaluation["strength"]),
+                    "confidence": evaluation["confidence"],
+                    "reasons": evaluation["reasons"],
+                    "warnings": evaluation["warnings"],
+                    "risk_management": {
+                        "entry_price": evaluation.get("entry_price"),
+                        "stop_loss": evaluation.get("stop_loss"),
+                        "take_profit": evaluation.get("take_profit")
+                    } if evaluation["should_enter"] else None
+                })
+
+        # エントリー推奨順にソート
+        evaluations.sort(
+            key=lambda x: (x["should_enter"], x["confidence"]),
+            reverse=True
+        )
+
+        return evaluations
 
     def _perform_technical_analysis(self, data: pd.DataFrame, timeframe: TimeFrame) -> Dict[str, Any]:
         """テクニカル分析実行"""
@@ -653,46 +976,106 @@ class MultiTimeFrameAnalyzer:
             return "弱い"
 
     def _generate_timeframe_signal(self, rsi: float, trend: str, momentum: str, timeframe: TimeFrame) -> Dict:
-        """時間軸別シグナル生成"""
-        confidence = 50.0
-        strength = "中程度"
+        """
+        時間軸別シグナル生成（改善版）
+        複数指標を組み合わせた信頼度計算
+        """
+        # 指標別スコア計算
+        scores = {
+            'trend': 0,      # トレンド方向スコア
+            'rsi': 0,        # RSI位置スコア
+            'momentum': 0,   # モメンタムスコア
+            'confluence': 0  # 指標一致度スコア
+        }
 
-        # 基本的なシグナル判定
-        if "上昇" in trend and rsi < 70:
-            action = "BUY"
-            confidence = 70.0
-            if momentum in ["強い", "やや強い"]:
-                confidence += 10
-            strength = "強い" if confidence > 75 else "中程度"
-        elif "下降" in trend and rsi > 30:
-            action = "SELL"
-            confidence = 70.0
-            if momentum in ["弱い", "やや弱い"]:
-                confidence += 10
-            strength = "強い" if confidence > 75 else "中程度"
-        elif rsi < 30:
-            action = "BUY"
-            confidence = 60.0
-            strength = "中程度"
-        elif rsi > 70:
-            action = "SELL"
-            confidence = 60.0
+        # 1. トレンド分析
+        if "強い上昇" in trend:
+            scores['trend'] = 30
+            base_action = "BUY"
+        elif "上昇" in trend:
+            scores['trend'] = 20
+            base_action = "BUY"
+        elif "強い下降" in trend:
+            scores['trend'] = 30
+            base_action = "SELL"
+        elif "下降" in trend:
+            scores['trend'] = 20
+            base_action = "SELL"
+        else:
+            scores['trend'] = 0
+            base_action = "HOLD"
+
+        # 2. RSI分析（買われすぎ・売られすぎ）
+        if rsi < 30:  # 売られすぎ → 買いシグナル
+            scores['rsi'] = 25
+            rsi_action = "BUY"
+        elif rsi < 40:
+            scores['rsi'] = 15
+            rsi_action = "BUY"
+        elif rsi > 70:  # 買われすぎ → 売りシグナル
+            scores['rsi'] = 25
+            rsi_action = "SELL"
+        elif rsi > 60:
+            scores['rsi'] = 15
+            rsi_action = "SELL"
+        else:  # 中立
+            scores['rsi'] = 5
+            rsi_action = "HOLD"
+
+        # 3. モメンタム分析
+        if momentum in ["強い", "やや強い"]:
+            scores['momentum'] = 20
+        elif momentum in ["弱い", "やや弱い"]:
+            scores['momentum'] = 20
+        else:
+            scores['momentum'] = 5
+
+        # 4. 指標の一致度（confluence）チェック
+        signals = [base_action, rsi_action]
+        if base_action == rsi_action and base_action != "HOLD":
+            scores['confluence'] = 25  # 指標が一致
+        elif base_action != "HOLD" and rsi_action == "HOLD":
+            scores['confluence'] = 10  # 部分一致
+        else:
+            scores['confluence'] = 0   # 不一致
+
+        # 最終アクション決定（多数決）
+        buy_count = signals.count("BUY")
+        sell_count = signals.count("SELL")
+
+        if buy_count > sell_count:
+            final_action = "BUY"
+        elif sell_count > buy_count:
+            final_action = "SELL"
+        else:
+            final_action = "HOLD"
+
+        # 信頼度計算（0-100）
+        raw_confidence = sum(scores.values())
+
+        # 時間軸による重み付け
+        if timeframe == TimeFrame.LONG:
+            raw_confidence *= 1.15  # 長期: +15%
+        elif timeframe == TimeFrame.MEDIUM:
+            raw_confidence *= 1.05  # 中期: +5%
+        elif timeframe == TimeFrame.ULTRA_SHORT:
+            raw_confidence *= 0.85  # 超短期: -15%
+
+        confidence = min(raw_confidence, 95)  # 最大95%
+
+        # 強度判定
+        if confidence >= 75:
+            strength = "強い"
+        elif confidence >= 55:
             strength = "中程度"
         else:
-            action = "HOLD"
-            confidence = 40.0
             strength = "弱い"
 
-        # 時間軸による信頼度調整
-        if timeframe == TimeFrame.LONG:
-            confidence *= 1.1  # 長期は信頼度高
-        elif timeframe == TimeFrame.ULTRA_SHORT:
-            confidence *= 0.9  # 超短期は信頼度やや低
-
         return {
-            "action": action,
-            "confidence": min(confidence, 95),
-            "strength": strength
+            "action": final_action,
+            "confidence": confidence,
+            "strength": strength,
+            "scores": scores  # デバッグ用
         }
 
     def _llm_analysis(self, algorithmic_results: Dict, symbol: str) -> Dict[str, Any]:

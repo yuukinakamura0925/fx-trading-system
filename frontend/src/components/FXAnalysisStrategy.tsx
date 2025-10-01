@@ -1,106 +1,76 @@
-// FX分析・戦略システムコンポーネント
+// FX過去データ表示コンポーネント
 'use client'
 
 import { useState, useEffect } from 'react'
 import {
-  TrendingUp,
-  TrendingDown,
   Clock,
-  Target,
   BarChart3,
   RefreshCw,
   AlertCircle,
-  CheckCircle,
   Play,
-  Pause
+  Pause,
+  Table,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  LineChart
 } from 'lucide-react'
+import {
+  ComposedChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  Bar
+} from 'recharts'
 
-// 分析結果の型定義
-interface TimeframeAnalysis {
+// OHLC データポイントの型定義
+interface OHLCData {
+  timestamp: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+// タイムフレームデータの型定義
+interface TimeframeData {
   timeframe: string
-  trading_style: string
   description: string
-  analysis: {
-    current_price: number
-    trend: string
-    signal: string
-    confidence: number
-    strength: string
-    rsi: number
-    momentum: string
-    volatility: number
-    key_levels: {
-      resistance: number
-      support: number
-      pivot: number
-    }
-  }
-  entry_points: Array<{
-    type: string
-    price: number
-    stop_loss: number
-    take_profit: number
-    timeframe: string
-    reason: string
-  }>
-  strategy: {
-    style: string
-    holding_period: string
-    profit_target: string
-    stop_loss: string
-    frequency: string
-    best_sessions: string[]
-    avoid_times: string[]
-  }
+  interval: string
+  days: number
+  data: OHLCData[]
   data_points: number
 }
 
-interface IntegratedStrategy {
-  integrated_signal: string
-  confidence: number
-  signal_alignment: string
-  recommended_strategies: Array<{
-    timeframe: string
-    style: string
-    confidence: number
-    entry_points: Array<{
-      type: string
-      price: number
-      stop_loss: number
-      take_profit: number
-      timeframe: string
-      reason: string
-    }>
-    priority: string
-  }>
-  risk_level: string
-  market_timing: {
-    current_session: string
-    activity_level: string
-    week_timing: string
-    recommendation: string
-  }
-}
-
-interface AnalysisResult {
+// API レスポンスの型定義
+interface HistoricalDataResult {
   timestamp: string
   symbol: string
-  timeframe_analyses: Record<string, TimeframeAnalysis>
-  integrated_strategy: IntegratedStrategy
-  market_session: {
-    active_sessions: string[]
-    optimal_for: string
+  timeframes: Record<string, TimeframeData>
+  api_info?: {
+    source: string
+    rate_limit: string
+    note: string
   }
 }
 
 export default function FXAnalysisStrategy() {
   // ステート管理
   const [selectedSymbol, setSelectedSymbol] = useState('USDJPY=X')
-  const [analysisData, setAnalysisData] = useState<AnalysisResult | null>(null)
+  const [historicalData, setHistoricalData] = useState<HistoricalDataResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [autoUpdate, setAutoUpdate] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('5m')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(50)
+  const [viewMode, setViewMode] = useState<'chart' | 'table'>('chart')
 
   // 通貨ペアオプション
   const currencyPairs = [
@@ -111,8 +81,8 @@ export default function FXAnalysisStrategy() {
     { symbol: 'EURUSD=X', name: 'EUR/USD', description: 'ユーロ/米ドル' }
   ]
 
-  // 分析実行関数
-  const runAnalysis = async () => {
+  // データ取得関数
+  const fetchData = async () => {
     setLoading(true)
     setError(null)
 
@@ -128,7 +98,7 @@ export default function FXAnalysisStrategy() {
       })
 
       if (!response.ok) {
-        throw new Error(`分析エラー: ${response.status}`)
+        throw new Error(`データ取得エラー: ${response.status}`)
       }
 
       const result = await response.json()
@@ -137,12 +107,33 @@ export default function FXAnalysisStrategy() {
         throw new Error(result.error)
       }
 
-      setAnalysisData(result)
-      setLastUpdate(new Date())
+      setHistoricalData(result)
+
+      // フロントエンドでキャッシュ（localStorageに保存）
+      const cacheKey = `fx_data_${selectedSymbol}`
+      localStorage.setItem(cacheKey, JSON.stringify({
+        data: result,
+        timestamp: new Date().toISOString()
+      }))
     } catch (err) {
-      setError(err instanceof Error ? err.message : '分析中にエラーが発生しました')
+      setError(err instanceof Error ? err.message : 'データ取得中にエラーが発生しました')
     } finally {
       setLoading(false)
+    }
+  }
+
+  // キャッシュからデータを読み込む関数
+  const loadFromCache = () => {
+    const cacheKey = `fx_data_${selectedSymbol}`
+    const cached = localStorage.getItem(cacheKey)
+
+    if (cached) {
+      try {
+        const { data } = JSON.parse(cached)
+        setHistoricalData(data)
+      } catch (e) {
+        console.error('キャッシュ読み込みエラー:', e)
+      }
     }
   }
 
@@ -152,7 +143,7 @@ export default function FXAnalysisStrategy() {
 
     if (autoUpdate) {
       interval = setInterval(() => {
-        runAnalysis()
+        fetchData()
       }, 60000) // 1分ごとに更新
     }
 
@@ -161,36 +152,11 @@ export default function FXAnalysisStrategy() {
     }
   }, [autoUpdate, selectedSymbol])
 
-  // 初回データ取得
+  // 初回データ取得（キャッシュから読み込んでから最新データ取得）
   useEffect(() => {
-    runAnalysis()
+    loadFromCache() // まずキャッシュから読み込み
+    fetchData() // その後最新データを取得
   }, [selectedSymbol])
-
-  // シグナルの色を取得
-  const getSignalColor = (signal: string) => {
-    switch (signal) {
-      case 'BUY': return 'text-green-600 bg-green-50'
-      case 'SELL': return 'text-red-600 bg-red-50'
-      default: return 'text-gray-600 bg-gray-50'
-    }
-  }
-
-  // 信頼度に基づく色を取得
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return 'text-green-600'
-    if (confidence >= 60) return 'text-yellow-600'
-    return 'text-red-600'
-  }
-
-  // リスクレベルの色を取得
-  const getRiskColor = (risk: string) => {
-    switch (risk) {
-      case '低': return 'text-green-600 bg-green-50'
-      case '中': return 'text-yellow-600 bg-yellow-50'
-      case '高': return 'text-red-600 bg-red-50'
-      default: return 'text-gray-600 bg-gray-50'
-    }
-  }
 
   return (
     <div className="space-y-6">
@@ -198,8 +164,8 @@ export default function FXAnalysisStrategy() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">🎯 FX分析・戦略システム</h2>
-            <p className="text-gray-600">マルチタイムフレーム分析による総合的な取引戦略</p>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">📊 FX過去データ表示</h2>
+            <p className="text-gray-600">マルチタイムフレームの過去価格データ</p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3">
@@ -217,12 +183,12 @@ export default function FXAnalysisStrategy() {
             </select>
 
             <button
-              onClick={runAnalysis}
+              onClick={fetchData}
               disabled={loading}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              <span>{loading ? '分析中...' : '分析実行'}</span>
+              <span>{loading ? 'データ取得中...' : 'データ取得'}</span>
             </button>
 
             <button
@@ -238,12 +204,6 @@ export default function FXAnalysisStrategy() {
             </button>
           </div>
         </div>
-
-        {lastUpdate && (
-          <div className="mt-4 text-sm text-gray-500">
-            最終更新: {lastUpdate.toLocaleString('ja-JP')}
-          </div>
-        )}
       </div>
 
       {/* エラー表示 */}
@@ -258,190 +218,373 @@ export default function FXAnalysisStrategy() {
       )}
 
       {/* ローディング表示 */}
-      {loading && !analysisData && (
+      {loading && !historicalData && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
           <RefreshCw className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
-          <p className="text-gray-600">分析を実行しています...</p>
+          <p className="text-gray-600">データを取得しています...</p>
         </div>
       )}
 
-      {/* 分析結果表示 */}
-      {analysisData && (
-        <>
-          {/* 統合判断カード */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-4 flex items-center space-x-2">
-              <CheckCircle className="h-6 w-6 text-green-600" />
-              <span>📊 統合判断</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className={`text-2xl font-bold px-4 py-2 rounded-lg ${getSignalColor(analysisData.integrated_strategy.integrated_signal)}`}>
-                  {analysisData.integrated_strategy.integrated_signal}
-                </div>
-                <p className="text-sm text-gray-600 mt-1">統合シグナル</p>
-              </div>
-
-              <div className="text-center">
-                <div className={`text-2xl font-bold ${getConfidenceColor(analysisData.integrated_strategy.confidence)}`}>
-                  {analysisData.integrated_strategy.confidence.toFixed(1)}%
-                </div>
-                <p className="text-sm text-gray-600 mt-1">信頼度</p>
-              </div>
-
-              <div className="text-center">
-                <div className={`text-lg font-bold px-3 py-2 rounded-lg ${getRiskColor(analysisData.integrated_strategy.risk_level)}`}>
-                  {analysisData.integrated_strategy.risk_level}
-                </div>
-                <p className="text-sm text-gray-600 mt-1">リスクレベル</p>
-              </div>
-
-              <div className="text-center">
-                <div className="text-lg font-bold text-blue-600">
-                  {analysisData.integrated_strategy.signal_alignment}
-                </div>
-                <p className="text-sm text-gray-600 mt-1">シグナル一致度</p>
+      {/* API情報表示 */}
+      {historicalData?.api_info && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <BarChart3 className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div className="flex-1">
+              <h4 className="font-semibold text-blue-900 mb-1">データソース情報</h4>
+              <div className="text-sm text-blue-700 space-y-1">
+                <div>📊 {historicalData.api_info.source}</div>
+                <div>⚡ {historicalData.api_info.rate_limit}</div>
+                <div>💾 {historicalData.api_info.note}</div>
               </div>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* マルチタイムフレーム分析 */}
+      {/* 過去データ表示 */}
+      {historicalData && historicalData.timeframes && (
+        <>
+          {/* マルチタイムフレーム過去データサマリー */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center space-x-2">
               <Clock className="h-6 w-6 text-blue-600" />
-              <span>🕐 マルチタイムフレーム分析</span>
+              <span>🕐 マルチタイムフレーム過去データ</span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {Object.entries(analysisData.timeframe_analyses).map(([timeframe, analysis]) => (
-                <div key={timeframe} className="border border-gray-200 rounded-lg p-4">
-                  <div className="text-center mb-3">
-                    <h4 className="font-bold text-gray-800">{analysis.description}</h4>
-                    <p className="text-sm text-gray-600">{timeframe}</p>
-                  </div>
+              {Object.entries(historicalData.timeframes).map(([timeframe, data]) => {
+                const latestCandle = data.data && data.data.length > 0 ? data.data[data.data.length - 1] : null
 
-                  <div className="space-y-2">
-                    <div className={`text-center px-3 py-2 rounded-lg ${getSignalColor(analysis.analysis.signal)}`}>
-                      <div className="font-bold">{analysis.analysis.signal}</div>
-                      <div className="text-sm">{analysis.analysis.confidence.toFixed(0)}%</div>
+                return (
+                  <div
+                    key={timeframe}
+                    className={`border-2 rounded-lg p-4 cursor-pointer transition-all ${
+                      selectedTimeframe === timeframe
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-blue-300'
+                    }`}
+                    onClick={() => {
+                      setSelectedTimeframe(timeframe)
+                      setCurrentPage(1) // ページをリセット
+                    }}
+                  >
+                    <div className="text-center mb-3">
+                      <h4 className="font-bold text-gray-800">{data.description}</h4>
+                      <p className="text-sm text-gray-600">{timeframe}</p>
                     </div>
 
-                    <div className="text-xs text-gray-600 space-y-1">
-                      <div>保有期間: {analysis.strategy.holding_period}</div>
-                      <div>利益目標: {analysis.strategy.profit_target}</div>
-                      <div>RSI: {analysis.analysis.rsi.toFixed(1)}</div>
-                      <div>トレンド: {analysis.analysis.trend}</div>
-                    </div>
+                    {latestCandle ? (
+                      <div className="space-y-2">
+                        <div className="text-center px-3 py-2 rounded-lg bg-gray-100">
+                          <div className="font-bold text-lg">{latestCandle.close.toFixed(3)}</div>
+                          <div className="text-xs text-gray-600">最新終値</div>
+                        </div>
+
+                        <div className="text-xs text-gray-600 space-y-1">
+                          <div>始値: {latestCandle.open.toFixed(3)}</div>
+                          <div>高値: {latestCandle.high.toFixed(3)}</div>
+                          <div>安値: {latestCandle.low.toFixed(3)}</div>
+                          <div>データポイント: {data.data_points}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center text-sm text-red-600">
+                        データなし
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 
-          {/* 推奨エントリーポイント */}
-          {analysisData.integrated_strategy.recommended_strategies.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center space-x-2">
-                <Target className="h-6 w-6 text-purple-600" />
-                <span>📍 推奨エントリーポイント</span>
-              </h3>
+          {/* 詳細データ表示（チャート/テーブル） */}
+          {selectedTimeframe && historicalData.timeframes[selectedTimeframe] && (() => {
+            const timeframeData = historicalData.timeframes[selectedTimeframe]
+            const reversedData = [...timeframeData.data].reverse()
+            const totalItems = reversedData.length
+            const totalPages = Math.ceil(totalItems / itemsPerPage)
+            const startIndex = (currentPage - 1) * itemsPerPage
+            const endIndex = startIndex + itemsPerPage
+            const currentData = reversedData.slice(startIndex, endIndex)
 
-              <div className="space-y-4">
-                {analysisData.integrated_strategy.recommended_strategies.map((strategy, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <h4 className="font-bold text-gray-800">{strategy.style}</h4>
-                        <p className="text-sm text-gray-600">
-                          時間軸: {strategy.timeframe} | 優先度: {strategy.priority} | 信頼度: {strategy.confidence}%
-                        </p>
-                      </div>
-                      <div className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                        strategy.priority === '高' ? 'bg-red-100 text-red-800' :
-                        strategy.priority === '中' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {strategy.priority}
-                      </div>
+            // チャート用データ（最新200件）
+            const chartData = reversedData.slice(0, 200).reverse().map(candle => ({
+              time: new Date(candle.timestamp).toLocaleString('ja-JP', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              }),
+              open: candle.open,
+              high: candle.high,
+              low: candle.low,
+              close: candle.close,
+              timestamp: candle.timestamp
+            }))
+
+            return (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-bold text-gray-800 flex items-center space-x-2">
+                    {viewMode === 'chart' ? (
+                      <LineChart className="h-6 w-6 text-green-600" />
+                    ) : (
+                      <Table className="h-6 w-6 text-green-600" />
+                    )}
+                    <span>📋 {timeframeData.description} - 詳細データ</span>
+                  </h3>
+
+                  <div className="flex items-center gap-3">
+                    {/* 表示モード切り替え */}
+                    <div className="flex bg-gray-100 rounded-lg p-1">
+                      <button
+                        onClick={() => setViewMode('chart')}
+                        className={`px-4 py-1 rounded-md text-sm font-medium transition-all ${
+                          viewMode === 'chart'
+                            ? 'bg-white text-blue-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        <LineChart className="h-4 w-4 inline mr-1" />
+                        チャート
+                      </button>
+                      <button
+                        onClick={() => setViewMode('table')}
+                        className={`px-4 py-1 rounded-md text-sm font-medium transition-all ${
+                          viewMode === 'table'
+                            ? 'bg-white text-blue-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-900'
+                        }`}
+                      >
+                        <Table className="h-4 w-4 inline mr-1" />
+                        テーブル
+                      </button>
                     </div>
 
-                    {strategy.entry_points.map((entry, entryIndex) => (
-                      <div key={entryIndex} className="bg-gray-50 rounded-lg p-3">
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
-                          <div>
-                            <span className="font-medium text-gray-700">エントリー:</span>
-                            <div className="font-bold text-blue-600">{entry.price.toFixed(3)}円</div>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">利確:</span>
-                            <div className="font-bold text-green-600">{entry.take_profit.toFixed(3)}円</div>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">損切:</span>
-                            <div className="font-bold text-red-600">{entry.stop_loss.toFixed(3)}円</div>
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-700">期間:</span>
-                            <div className="text-gray-800">{entry.timeframe}</div>
-                          </div>
-                        </div>
-                        <div className="mt-2 text-sm text-gray-600">
-                          <strong>理由:</strong> {entry.reason}
-                        </div>
-                      </div>
-                    ))}
+                    {viewMode === 'table' && (
+                      <select
+                        value={itemsPerPage}
+                        onChange={(e) => {
+                          setItemsPerPage(Number(e.target.value))
+                          setCurrentPage(1)
+                        }}
+                        className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value={25}>25件/ページ</option>
+                        <option value={50}>50件/ページ</option>
+                        <option value={100}>100件/ページ</option>
+                        <option value={200}>200件/ページ</option>
+                      </select>
+                    )}
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 市場タイミング情報 */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-xl font-bold text-gray-800 mb-6 flex items-center space-x-2">
-              <BarChart3 className="h-6 w-6 text-green-600" />
-              <span>⏰ 市場タイミング</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="font-bold text-lg text-blue-600">
-                  {analysisData.integrated_strategy.market_timing.current_session}
                 </div>
-                <p className="text-sm text-gray-600">現在セッション</p>
-              </div>
 
-              <div className="text-center">
-                <div className="font-bold text-lg text-purple-600">
-                  {analysisData.integrated_strategy.market_timing.activity_level}
+                {/* チャート表示 */}
+                {viewMode === 'chart' && (
+                  <div className="w-full" style={{ height: '500px' }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis
+                          dataKey="time"
+                          tick={{ fontSize: 12 }}
+                          interval={Math.floor(chartData.length / 10)}
+                        />
+                        <YAxis
+                          domain={['dataMin - 0.5', 'dataMax + 0.5']}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '8px',
+                            padding: '12px'
+                          }}
+                          formatter={(value: any) => value.toFixed(3)}
+                        />
+                        <Legend />
+                        <Line
+                          type="monotone"
+                          dataKey="close"
+                          stroke="#2563eb"
+                          strokeWidth={2}
+                          dot={false}
+                          name="終値"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="high"
+                          stroke="#10b981"
+                          strokeWidth={1}
+                          dot={false}
+                          name="高値"
+                          strokeDasharray="5 5"
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="low"
+                          stroke="#ef4444"
+                          strokeWidth={1}
+                          dot={false}
+                          name="安値"
+                          strokeDasharray="5 5"
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                    <p className="text-sm text-gray-500 mt-4">
+                      ※ 最新200件を表示しています（全{totalItems}件）
+                    </p>
+                  </div>
+                )}
+
+                {/* テーブル表示 */}
+                {viewMode === 'table' && (
+                  <>
+                    <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          時刻
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          始値
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          高値
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          安値
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          終値
+                        </th>
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          変動
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {currentData.map((candle, index) => {
+                        const change = candle.close - candle.open
+                        const changePercent = (change / candle.open) * 100
+                        const isPositive = change >= 0
+
+                        return (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                              {new Date(candle.timestamp).toLocaleString('ja-JP', {
+                                month: '2-digit',
+                                day: '2-digit',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">
+                              {candle.open.toFixed(3)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">
+                              {candle.high.toFixed(3)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-gray-900">
+                              {candle.low.toFixed(3)}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap text-sm text-right font-medium text-gray-900">
+                              {candle.close.toFixed(3)}
+                            </td>
+                            <td className={`px-4 py-3 whitespace-nowrap text-sm text-right font-medium ${
+                              isPositive ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {isPositive ? '+' : ''}{change.toFixed(3)} ({changePercent.toFixed(2)}%)
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-                <p className="text-sm text-gray-600">活動レベル</p>
-              </div>
 
-              <div className="text-center">
-                <div className="font-bold text-lg text-orange-600">
-                  {analysisData.market_session.optimal_for}
+                {/* ページネーションコントロール */}
+                <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
+                  <div className="text-sm text-gray-600">
+                    {startIndex + 1} - {Math.min(endIndex, totalItems)} / 全{totalItems}件
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="最初のページ"
+                    >
+                      <ChevronsLeft className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="前のページ"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum
+                        if (totalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i
+                        } else {
+                          pageNum = currentPage - 2 + i
+                        }
+
+                        return (
+                          <button
+                            key={i}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`px-3 py-1 rounded-lg ${
+                              currentPage === pageNum
+                                ? 'bg-blue-600 text-white'
+                                : 'border border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="次のページ"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+
+                    <button
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage === totalPages}
+                      className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="最後のページ"
+                    >
+                      <ChevronsRight className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-600">最適スタイル</p>
+                  </>
+                )}
               </div>
-
-              <div className="text-center">
-                <div className="font-bold text-lg text-gray-800">
-                  {analysisData.integrated_strategy.market_timing.recommendation}
-                </div>
-                <p className="text-sm text-gray-600">推奨</p>
-              </div>
-            </div>
-
-            {analysisData.market_session.active_sessions.length > 0 && (
-              <div className="mt-4 text-center">
-                <p className="text-sm text-gray-600">
-                  活動中市場: {analysisData.market_session.active_sessions.join(', ')}
-                </p>
-              </div>
-            )}
-          </div>
+            )
+          })()}
         </>
       )}
     </div>

@@ -1,12 +1,41 @@
 from rest_framework import serializers
 from core.models import Currency
 from trading.models import Strategy, Position, Trade, StrategyPerformance
+from .models import KLine
+
 
 class CurrencySerializer(serializers.ModelSerializer):
     """通貨ペア情報のJSON変換クラス"""
     class Meta:
         model = Currency
         fields = '__all__'  # 全フィールドを含める
+
+
+class KLineSerializer(serializers.ModelSerializer):
+    """
+    KLine（ローソク足）データのJSON変換クラス
+    GMO APIから取得した四本値データをJSON形式で提供
+    """
+    # 通貨ペアのシンボル名を追加（例: USD_JPY）
+    currency_symbol = serializers.CharField(source='currency.symbol', read_only=True)
+
+    class Meta:
+        model = KLine
+        fields = [
+            'id',
+            'currency',
+            'currency_symbol',  # 読みやすさのため通貨ペア名も含める
+            'price_type',       # BID or ASK
+            'interval',         # 1min, 5min, 1hour など
+            'open_time',        # 開始時刻
+            'open',             # 始値
+            'high',             # 高値
+            'low',              # 安値
+            'close',            # 終値
+            'created_at'        # データ登録日時
+        ]
+        # 読み取り専用フィールド（データ登録後は変更不可）
+        read_only_fields = ['id', 'currency_symbol', 'created_at']
 
 class StrategySerializer(serializers.ModelSerializer):
     """取引戦略のJSON変換クラス"""

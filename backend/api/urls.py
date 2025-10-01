@@ -7,7 +7,7 @@ router = DefaultRouter()
 
 # 各ViewSetをルーターに登録
 router.register(r'currencies', views.CurrencyViewSet)        # /api/currencies/
-# market-dataは削除 - GMO APIから直接取得
+router.register(r'klines', views.KLineViewSet)              # /api/klines/
 router.register(r'strategies', views.StrategyViewSet)        # /api/strategies/
 router.register(r'positions', views.PositionViewSet)        # /api/positions/
 router.register(r'trades', views.TradeViewSet)              # /api/trades/
@@ -25,7 +25,8 @@ urlpatterns = [
 # 生成されるAPIエンドポイント一覧:
 # GET    /api/currencies/                    # 全通貨ペア取得
 # GET    /api/currencies/active/             # アクティブ通貨ペア取得
-# 市場データ関連は削除 - GMO APIから直接取得
+# GET    /api/klines/                        # KLineデータ一覧取得
+# POST   /api/klines/fetch_from_gmo/         # GMOからKLineデータを取得・保存
 # GET    /api/strategies/                    # 全戦略取得
 # GET    /api/strategies/active/             # アクティブ戦略取得
 # GET    /api/positions/                     # 全ポジション取得
@@ -38,6 +39,6 @@ urlpatterns = [
 # GMO API プロキシ:
 # GET    /api/gmo/status/                    # GMO API ステータス
 # GET    /api/gmo/ticker/                    # GMO API レート情報
-# GET    /api/gmo/klines/                    # GMO API ローソク足
+# GET    /api/gmo/klines/                    # GMO API ローソク足（プロキシ）
 # GET    /api/gmo/symbols/                   # GMO API 通貨ペア情報
 # GET    /api/gmo/orderbooks/                # GMO API 板情報

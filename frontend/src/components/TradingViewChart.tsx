@@ -22,58 +22,81 @@ export default function TradingViewChart({ symbol }: TradingViewChartProps) {
   const [isProChart, setIsProChart] = useState(false) // デフォルト軽量版
 
   useEffect(() => {
-    if (!containerRef.current) return
+    // DOMが完全にマウントされるまで待機
+    const timer = setTimeout(() => {
+      if (!containerRef.current) return
 
-    // 既存のスクリプトをクリア
-    containerRef.current.innerHTML = ''
+      // 既存のスクリプトとウィジェットをクリア
+      containerRef.current.innerHTML = ''
 
-    const script = document.createElement('script')
-    script.type = 'text/javascript'
-    script.async = true
+      // TradingViewウィジェットのコンテナを作成
+      const widgetContainer = document.createElement('div')
+      widgetContainer.className = 'tradingview-widget-container'
+      widgetContainer.style.height = '100%'
+      widgetContainer.style.width = '100%'
 
-    if (isProChart) {
-      // プロチャート（高機能版）
-      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'
-      script.innerHTML = JSON.stringify({
-        "autosize": true,
-        "symbol": `FX:${symbol.replace('_', '')}`,
-        "interval": selectedInterval,
-        "timezone": "Asia/Tokyo",
-        "theme": "light",
-        "style": "1",
-        "locale": "ja",
-        "toolbar_bg": "#f1f3f6",
-        "enable_publishing": false,
-        "allow_symbol_change": false,
-        "hide_side_toolbar": false,
-        "details": true,
-        "hotlist": true,
-        "calendar": true,
-        "studies": ["Volume@tv-basicstudies"],
-        "container_id": "tradingview_chart"
-      })
-    } else {
-      // 軽量チャート（シンプル版）
-      script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js'
-      script.innerHTML = JSON.stringify({
-        "symbol": `FX:${symbol.replace('_', '')}`,
-        "width": "100%",
-        "height": "400",
-        "locale": "ja",
-        "dateRange": "12M",
-        "colorTheme": "light",
-        "trendLineColor": "rgba(41, 98, 255, 1)",
-        "underLineColor": "rgba(41, 98, 255, 0.3)",
-        "underLineBottomColor": "rgba(41, 98, 255, 0)",
-        "isTransparent": false,
-        "autosize": true,
-        "largeChartUrl": ""
-      })
-    }
+      const widgetInner = document.createElement('div')
+      if (isProChart) {
+        widgetInner.className = 'tradingview-widget-container__widget'
+        widgetInner.id = 'tradingview_chart'
+      } else {
+        widgetInner.className = 'tradingview-widget-container__widget'
+      }
+      widgetInner.style.height = 'calc(100% - 32px)'
+      widgetInner.style.width = '100%'
 
-    containerRef.current.appendChild(script)
+      widgetContainer.appendChild(widgetInner)
+
+      const script = document.createElement('script')
+      script.type = 'text/javascript'
+      script.async = true
+
+      if (isProChart) {
+        // プロチャート（高機能版）
+        script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'
+        script.innerHTML = JSON.stringify({
+          "autosize": true,
+          "symbol": `FX:${symbol.replace('_', '')}`,
+          "interval": selectedInterval,
+          "timezone": "Asia/Tokyo",
+          "theme": "light",
+          "style": "1",
+          "locale": "ja",
+          "toolbar_bg": "#f1f3f6",
+          "enable_publishing": false,
+          "allow_symbol_change": false,
+          "hide_side_toolbar": false,
+          "details": true,
+          "hotlist": true,
+          "calendar": true,
+          "studies": ["Volume@tv-basicstudies"],
+          "container_id": "tradingview_chart"
+        })
+      } else {
+        // 軽量チャート（シンプル版）
+        script.src = 'https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js'
+        script.innerHTML = JSON.stringify({
+          "symbol": `FX:${symbol.replace('_', '')}`,
+          "width": "100%",
+          "height": "100%",
+          "locale": "ja",
+          "dateRange": "12M",
+          "colorTheme": "light",
+          "trendLineColor": "rgba(41, 98, 255, 1)",
+          "underLineColor": "rgba(41, 98, 255, 0.3)",
+          "underLineBottomColor": "rgba(41, 98, 255, 0)",
+          "isTransparent": false,
+          "autosize": true,
+          "largeChartUrl": ""
+        })
+      }
+
+      widgetContainer.appendChild(script)
+      containerRef.current.appendChild(widgetContainer)
+    }, 100)
 
     return () => {
+      clearTimeout(timer)
       if (containerRef.current) {
         containerRef.current.innerHTML = ''
       }
